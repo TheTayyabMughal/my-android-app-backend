@@ -1,0 +1,23 @@
+import { Router } from "express";
+import {
+  getAllServiceProviders,
+  getServiceProviderById,
+  getServiceProvidersByService,
+  updateServiceProvider,
+  deleteServiceProvider,
+  getServiceProviderHistoryById,
+  getNearestServiceProviders
+} from "../Controllers/ServiceProviders.controller.js";
+import { verifyAdmin, verifyJWT } from "../middlewares/Authentication.middleware.js";
+
+const router = Router();
+
+router.route("/getAll").get(getAllServiceProviders);
+router.route("/getbyid/:id").get(getServiceProviderById);
+router.route("/getbyservice/:serviceId").get(getServiceProvidersByService);
+router.route("/gethistory/:id").get(getServiceProviderHistoryById);
+router.route("/getNearest").get(getNearestServiceProviders);
+router.route("/update/:id").put(updateServiceProvider);
+router.route("/delete/:id").delete( verifyJWT,verifyAdmin,deleteServiceProvider);
+
+export default router;
