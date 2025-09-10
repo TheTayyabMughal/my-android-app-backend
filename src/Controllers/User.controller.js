@@ -125,6 +125,7 @@ const testSendMail = async () => {
 
 
 const registerUser = asynchandler(async (req, res) => {
+  console.log("Request body:", req.body);
   const { username, email, password, role = "customer" } = req.body;
 
   if (!username || !email || !password) {
@@ -138,7 +139,7 @@ const registerUser = asynchandler(async (req, res) => {
 
   const otp = ("" + Math.floor(1000 + Math.random() * 9000));
   const otpExpiry = Date.now() + 5 * 60 * 1000; 
-
+  console.log("Generated OTP:", otp);
   const user = await Users.create({
     username: username.toLowerCase(),
     password,
@@ -194,6 +195,7 @@ const verifyRegistrationOtp = asynchandler(async (req, res) => {
 const sendOtp = async (user) => {
   const otp = ("" + Math.random()).substring(2, 6);
   user.otp = otp;
+  console.log("Generated OTP for login:", otp);
   user.otpExpiry = Date.now() + 5 * 60 * 1000;
   await user.save();
 
@@ -226,6 +228,7 @@ const Loginuser = asynchandler(async (req, res) => {
 });
 
 const verifyOtp = asynchandler(async (req, res) => {
+  console.log("Verifying OTP with data:", req.body);
   const { email, otp } = req.body;
   const user = await Users.findOne({ email });
   if (!user) {
@@ -424,3 +427,4 @@ const existingUser = await Users.findOne({
 });
 
 export { registerUser,verifyRegistrationOtp,verifyEmailStep1,updatePasswordStep2,updatePassword, updateInfo,Loginuser, verifyOtp, LogoutUser, getCurrentUser,forgotPassword,resetPassword,testSendMail };
+
