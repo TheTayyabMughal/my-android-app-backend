@@ -17,22 +17,7 @@ import paymentRoute from "./routes/Payment.routes.js"
 const app = express();
 
 
-const allowedOrigins = ["http://localhost:8081", "http://localhost:5173","*"];
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE","PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+app.use(cors());
 
 
 app.use(express.json({ limit: "16kb" }));

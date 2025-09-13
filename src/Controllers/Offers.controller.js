@@ -5,26 +5,14 @@ import { Apierror } from "../utils/Apierror.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 
 export const getAllOffers = asynchandler(async (req, res) => {
-  let { page = 1, limit = 10 } = req.query;
-
-  page = parseInt(page);
-  limit = parseInt(limit);
-
-  const totalOffers = await Offers.countDocuments();
-  const offers = await Offers.find()
-    .populate("serviceProvider servicesIncluded")
-    .skip((page - 1) * limit)
-    .limit(limit);
-
-  const hasNextPage = page * limit < totalOffers;
-
-  res.status(200).json({
-    success: true,
-    offers,
-    currentPage: page,
-    totalPages: Math.ceil(totalOffers / limit),
-    nextPage: hasNextPage ? page + 1 : null,
-  });
+  const userId = req.id;
+  const offers = await Offers.find({ serviceProvider: userId })
+  if (!offers) {
+    throw new Apierror(404, "No offers found");
+  }
+  return res
+    .status(200)
+    .json(new Apiresponse(200, offers, "Offers fetched successfully"));
 });
 
 export const getOfferById = asynchandler(async (req, res) => {
@@ -67,18 +55,18 @@ export const getOffersByServiceProvider = asynchandler(async (req, res) => {
 
 
 export const getOffersByToken = asynchandler(async (req, res) => {
-  const id=req.user._id;
+  const id = req.user._id;
   const servicerP = await ServiceProviders.findOne({ user: id });
 
   if (!servicerP) {
     return res.status(404).json({ success: false, message: "Service provider not found" });
   }
 
-  const offers=Offers.find({serviceProvider:servicerP}).populate("serviceProvider servicesIncluded")
+  const offers = Offers.find({ serviceProvider: servicerP }).populate("serviceProvider servicesIncluded")
 
   res
-  .status(200)
-  .json(new Apiresponse(200, offers, "Offer fetched successfully"));
+    .status(200)
+    .json(new Apiresponse(200, offers, "Offer fetched successfully"));
 });
 
 
@@ -87,34 +75,70 @@ export const createOffer = asynchandler(async (req, res) => {
     title,
     description,
     discountPercentage,
-    validFrom,
-    validUntil,
     servicesIncluded,
-    termsAndConditions,
-    price
   } = req.body;
-
-  const id=req.user._id
-  const providerExists = await ServiceProviders.findOne({user:id});
+  const id = req.id
+  const providerExists = await ServiceProviders.findById(id);
   if (!providerExists) {
     throw new Apierror(404, "Service provider not found");
   }
 
   const newOffer = await Offers.create({
-    price,
     title,
     description,
     discountPercentage,
-    validFrom,
-    validUntil,
-    serviceProvider:providerExists._id,
+    serviceProvider: providerExists._id,
     servicesIncluded,
-    termsAndConditions,
   });
 
   res
     .status(201)
     .json(new Apiresponse(201, newOffer, "Offer created successfully"));
+});
+
+
+export const getNearbyOffers = asynchandler(async (req, res) => {
+  try {
+    console.log(req.query);
+    const { lat, lng } = req.query; // user location
+    if (!lat || !lng) return res.status(400).json({ message: "Provide lat and lng" });
+
+    // Find providers within 10km radius
+    const nearbyProviders = await ServiceProviders.find({
+      currentLocation: {
+        $geoWithin: {
+          $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371] // 10km radius
+        }
+      }
+    });
+
+    const providerIds = nearbyProviders.map(p => p._id);
+
+    // Get active offers from these providers
+    const offers = await Offers.find({
+      serviceProvider: { $in: providerIds },
+      isActive: true
+    }).populate("serviceProvider", "username profilePic");
+
+    res.json({ offers });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+export const toggleOfferById = asynchandler(async (req, res) => {
+  const offerId = req.params.id;
+  const offer = await Offers.findById(offerId);
+  if (!offer) {
+    throw new Apierror(404, "Offer not found");
+  }
+
+  offer.isActive = !offer.isActive;
+  await offer.save();
+  return res
+    .status(200)
+    .json(new Apiresponse(200, offer, "Offer status toggled successfully"));
 });
 
 export const updateOffer = asynchandler(async (req, res) => {

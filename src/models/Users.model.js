@@ -22,10 +22,10 @@ const UserSchema = new Schema(
       enum: ["admin", "customer", "serviceProvider"],
       default: "customer",
     },
-    profilePic: {
-      type: String,
-      // required: true,
-    },
+    // profilePic: {
+    //   type: String,
+    //   // required: true,
+    // },
     refreshToken: {
       type: String,
     },

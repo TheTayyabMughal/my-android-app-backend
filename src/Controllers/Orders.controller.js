@@ -26,7 +26,7 @@ const createOrder = asynchandler(async (req, res) => {
     priority = "Medium"
   } = req.body;
 
-  const userId = req.user._id;
+  const userId = req.id;
 
   if (!orders || !Array.isArray(orders) || orders.length === 0) {
     throw new Apierror(400, "Valid order items are required");

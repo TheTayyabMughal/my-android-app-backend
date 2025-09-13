@@ -1,17 +1,17 @@
-import mongoose, { Schema, model } from "mongoose";
+import mongoose, { Schema } from "mongoose";
+import jwt from "jsonwebtoken";
 
 const ServiceProviderSchema = new Schema(
   {
-    location: {
+    currentLocation: {
       type: {
         type: String,
         enum: ["Point"],
-        required: true,
         default: "Point",
       },
       coordinates: {
-        type: [Number],
-        required: true,
+        type: [Number], // [longitude, latitude]
+        default: [0, 0],
       },
     },
     username: {
@@ -26,25 +26,24 @@ const ServiceProviderSchema = new Schema(
       required: true,
       unique: true,
     },
+    password: {
+      type: String,
+      required: true,
+    },
     profilePic: {
       type: String,
-      // required: true,
     },
     shopAddress: {
       type: String,
       required: true,
     },
-    servicesOffered: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Services",
-        required: true,
-      },
-    ],
+    servicesOffered: {
+      type: [String], // ✅ You are storing services as an array of string
+      required: true,
+    },
     user: {
       type: Schema.Types.ObjectId,
       ref: "Users",
-      required: true,
     },
     phoneNo: {
       type: String,
@@ -53,7 +52,37 @@ const ServiceProviderSchema = new Schema(
   },
   { timestamps: true }
 );
-ServiceProviderSchema.index({ location: "2dsphere" }); 
+
+// ✅ Add JWT methods on ServiceProviderSchema instead of UserSchema
+ServiceProviderSchema.methods.generateAccessToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      email: this.email,
+      username: this.username,
+      role: "provider", // ✅ role add karna acha hoga
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+    }
+  );
+};
+
+ServiceProviderSchema.methods.generateRefreshToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      username: this.username,
+      email: this.email,
+      role: "provider",
+    },
+    process.env.REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+    }
+  );
+};
 
 export const ServiceProviders = mongoose.model(
   "ServiceProviders",

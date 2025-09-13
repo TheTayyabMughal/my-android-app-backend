@@ -13,6 +13,7 @@ import {
   forgotPassword,
   resetPassword,
   verifyRegistrationOtp,
+  registerProvider
 } from "../Controllers/User.controller.js";
 import { upload } from "../middlewares/Multer.middleware.js";
 import { verifyJWT } from "../middlewares/Authentication.middleware.js";
@@ -20,11 +21,12 @@ const router = Router();
 
 router
   .route("/register")
-  .post(upload.fields([{ name: "profilePic", maxCount: 1 }]), registerUser);
+  .post(registerUser);
 
 router.route("/verify-registration-otp").post(verifyRegistrationOtp);
 
 router.route("/login").post(Loginuser);
+router.route("/register/provider").post(registerProvider);
 router.route("/verify-otp").post(verifyOtp);
 router.route("/logout").post(verifyJWT, LogoutUser);
 router.route("/getcurrent").get(verifyJWT, getCurrentUser);

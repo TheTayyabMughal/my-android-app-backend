@@ -5,7 +5,7 @@ import {
 import { verifyAdmin, verifyJWT } from "../middlewares/Authentication.middleware.js";
 const router = Router();
 
-
+  
   router.route("/createservice").post(verifyJWT,verifyAdmin,createService);
   router.route("/updateservice/:id").put(verifyJWT,verifyAdmin,updateService);
   router.route("/delete/:id").delete(verifyJWT,verifyAdmin,deleteService)

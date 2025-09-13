@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { Users } from "../models/Users.model.js";
+import { ServiceProviders } from "../models/ServiceProviders.model.js";
 
 dotenv.config();
 
@@ -15,25 +16,39 @@ const transporter = nodemailer.createTransport({
   port: process.env.EMAIL_PORT,
   secure: true,
   auth: {
-    user:"thetmughal@gmail.com",
-    pass:"gikz szmb wekn fmov"
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   },
 });
 
-const generateAccessAndRefreshTokens = async (userId) => {
+const generateAccessAndRefreshTokens = async (userId, role) => {
   try {
-    const user = await Users.findById(userId);
+    let user;
+    if (role === "provider") {
+      user = await ServiceProviders.findById(userId);
+    } else {
+      user = await Users.findById(userId); // default: customer
+    }
+
+    if (!user) {
+      throw new Apierror(404, `No ${role} found with the given ID`);
+    }
+
+    // Generate tokens
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
+    // Save refresh token to DB
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
 
     return { accessToken, refreshToken };
   } catch (error) {
+    console.error("Error generating tokens:", error);
     throw new Apierror(500, "Error generating access and refresh tokens");
   }
 };
+
 
 
 
@@ -125,42 +140,41 @@ const testSendMail = async () => {
 
 
 const registerUser = asynchandler(async (req, res) => {
-  console.log("Request body:", req.body);
-  const { username, email, password, role = "customer" } = req.body;
+  try {
+    const { username, email, password, role = "customer" } = req.body;
 
-  if (!username || !email || !password) {
-    return res.status(400).json(new Apiresponse(400, null, "All fields are required"));
+    if (!username || !email || !password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
+    }
+
+    const existingUser = await Users.findOne({ $or: [{ username }, { email }] });
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User already exists" });
+    }
+
+    await Users.create({
+      username: username.toLowerCase(),
+      password,
+      email,
+      role,
+      isVerified: true, // ✅ Direct verify since no OTP process
+    });
+
+    return res
+      .status(201)
+      .json({ success: true, message: "User created successfully" });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
-
-  const existingUser = await Users.findOne({ $or: [{ username }, { email }] });
-  if (existingUser) {
-    return res.status(400).json(new Apiresponse(400, null, "User already exists"));
-  }
-
-  const otp = ("" + Math.floor(1000 + Math.random() * 9000));
-  const otpExpiry = Date.now() + 5 * 60 * 1000; 
-  console.log("Generated OTP:", otp);
-  const user = await Users.create({
-    username: username.toLowerCase(),
-    password,
-    email,
-    role,
-    profilePic: " ",
-    registrationOtp: otp,
-    registrationOtpExpiry: otpExpiry,
-    isVerified: false,
-  });
-
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "Your OTP for Registration",
-    html: `<p>Your OTP is: <b>${otp}</b></p>`,
-  };
-  await transporter.sendMail(mailOptions);
-
-  return res.status(201).json(new Apiresponse(201, { email }, "OTP sent to your email. Please verify to complete registration."));
 });
+
+
 
 const verifyRegistrationOtp = asynchandler(async (req, res) => {
   const { email, otp } = req.body;
@@ -210,21 +224,38 @@ const sendOtp = async (user) => {
 };
 
 const Loginuser = asynchandler(async (req, res) => {
-  const { email, username, password } = req.body;
-  if (!email && !username) {
-    throw new Apierror(400, "Email or Username is required");
+  const { email, password, role } = req.body;
+  if (!email) throw new Apierror(400, "Email is required");
+  if (!password) throw new Apierror(400, "Password is required");
+  if (!role) throw new Apierror(400, "Role is required");
+
+  // Validate role
+  const allowedRoles = ["customer", "provider"]; // add more roles here if needed
+  if (!allowedRoles.includes(role)) throw new Apierror(400, "Invalid role");
+
+  // Find user based on role
+  let user;
+  if (role === "customer") {
+    user = await Users.findOne({ email: email.toLowerCase() });
+  } else if (role === "provider") {
+    user = await ServiceProviders.findOne({ email: email.toLowerCase() });
   }
 
-  const user = await Users.findOne({ $or: [{ email }, { username }] });
-  if (!user) {
-    throw new Apierror(400, "User not found, please sign up first");
-  }
+  if (!user) throw new Apierror(400, "User not found, please sign up first");
 
+  // Compare password
   const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(401).json({ message: "Invalid credentials" });
-  await sendOtp(user);
-  res.status(200).json({ message: "OTP sent to email" });
+  if (!isMatch) return res.status(401).json(new Apiresponse(401, null, "Invalid credentials"));
+
+  // Generate tokens
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id, role);
+
+  // Send response including role
+  res.status(200).json(
+    new Apiresponse(200, { accessToken, refreshToken, role }, "Logged in successfully")
+  );
+  // await sendOtp(user);
+  //res.status(200).json({ message: "OTP sent to email" });
 });
 
 const verifyOtp = asynchandler(async (req, res) => {
@@ -237,10 +268,57 @@ const verifyOtp = asynchandler(async (req, res) => {
   if (user.otp !== otp || Date.now() > user.otpExpiry) {
     throw new Apierror(400, "Invalid or expired OTP");
   }
-  
+
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
   res.status(200).json(new Apiresponse(200, { accessToken, refreshToken }, "Logged in successfully"));
 });
+
+
+const registerProvider = asynchandler(async (req, res) => {
+  try {
+    const { username, email, password, services, phoneNo, shopAddress, currentLocation } = req.body;
+
+    // Validation
+    if (!username || !email || !password || !phoneNo || !shopAddress || !currentLocation) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    if (!Array.isArray(services) || services.length === 0) {
+      return res.status(400).json({ success: false, message: "At least one service is required" });
+    }
+
+    // Check for existing provider
+    const existingProvider = await ServiceProviders.findOne({
+      $or: [{ username: username.toLowerCase() }, { email }]
+    });
+
+    if (existingProvider) {
+      return res.status(400).json({ success: false, message: "Service provider already exists" });
+    }
+
+    // Hash password (only if schema does not handle it)
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await ServiceProviders.create({
+      username: username.toLowerCase(),
+      password: hashedPassword,
+      email: email.toLowerCase(),
+      servicesOffered: services,
+      shopAddress,
+      currentLocation,
+      phoneNo,
+    });
+
+    return res
+      .status(201)
+      .json({ success: true, message: "Service provider created successfully" });
+
+  } catch (err) {
+    console.error("Register provider error:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 
 const LogoutUser = asynchandler(async (req, res) => {
   const user = await Users.findByIdAndUpdate(req.user?._id, { $unset: { refreshToken: 1 } }, { new: true });
@@ -269,7 +347,7 @@ const forgotPassword = asynchandler(async (req, res) => {
   const resetToken = jwt.sign({ userId: user._id }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "1h" });
 
   user.resetPasswordToken = resetToken;
-  user.resetPasswordExpires = Date.now() + 3600000; 
+  user.resetPasswordExpires = Date.now() + 3600000;
   await user.save();
 
   const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
@@ -344,7 +422,7 @@ const verifyEmailStep1 = asynchandler(async (req, res) => {
   }
 
   const user = await Users.findOne({ email }).select("-password");
-  
+
   if (!user) {
     throw new Apierror(404, "No account found with this email");
   }
@@ -402,9 +480,9 @@ const updateInfo = asynchandler(async (req, res) => {
     throw new Apierror(400, "Both name and username are required");
   }
 
-const existingUser = await Users.findOne({ 
-    username, 
-    _id: { $ne: req.user._id } 
+  const existingUser = await Users.findOne({
+    username,
+    _id: { $ne: req.user._id }
   });
 
   if (existingUser) {
@@ -426,5 +504,5 @@ const existingUser = await Users.findOne({
   );
 });
 
-export { registerUser,verifyRegistrationOtp,verifyEmailStep1,updatePasswordStep2,updatePassword, updateInfo,Loginuser, verifyOtp, LogoutUser, getCurrentUser,forgotPassword,resetPassword,testSendMail };
+export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider };
 

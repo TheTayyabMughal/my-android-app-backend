@@ -2,10 +2,6 @@ import mongoose, { Schema, model } from "mongoose";
 
 const OfferSchema = new Schema(
   {
-    price:{
-      type: Number,
-      required: true,
-    },
     title: {
       type: String,
       required: true,
@@ -21,14 +17,6 @@ const OfferSchema = new Schema(
       min: 0,
       max: 100,
     },
-    validFrom: {
-      type: Date,
-      required: true,
-    },
-    validUntil: {
-      type: Date,
-      required: true,
-    },
     serviceProvider: {
       type: Schema.Types.ObjectId,
       ref: "ServiceProviders",
@@ -36,14 +24,16 @@ const OfferSchema = new Schema(
     },
     servicesIncluded: [
       {
-        type: Schema.Types.ObjectId,
-        ref: "Services",
-        required: true,
+        name: {
+          type: String,
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+        }
       }
     ],
-    termsAndConditions: {
-      type: String,
-    },
     isActive: {
       type: Boolean,
       default: true,

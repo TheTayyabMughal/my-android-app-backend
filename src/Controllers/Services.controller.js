@@ -25,7 +25,7 @@ export const getServiceById = asynchandler(async (req, res) => {
   if (!service) {
     throw new Apierror(404, "Service not found");
   }
-
+  console.log(service);
   res.status(200).json(new Apiresponse(200, service, "Service fetched successfully"));
 });
 
