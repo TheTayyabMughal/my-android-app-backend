@@ -2,6 +2,8 @@ import {Measurements} from "../models/Measurements.model.js";
 import { asynchandler } from "../utils/Asynchandler.js";
 import { Apierror } from "../utils/Apierror.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
+import mongoose from "mongoose";
+import { Users } from "../models/Users.model.js";
 
 export const createMeasurement = asynchandler(async (req, res) => {
   const {
@@ -51,25 +53,57 @@ export const createMeasurement = asynchandler(async (req, res) => {
 });
 
 export const getMyMeasurements = asynchandler(async (req, res) => {
-  let { page = 1, limit = 10 } = req.query;
-  page = parseInt(page);
-  limit = parseInt(limit);
+  const userId = new mongoose.Types.ObjectId(req.id);
 
-  const total = await Measurement.countDocuments({ user: req.user._id });
-  const measurements = await Measurements.find({ user: req.user._id })
-    .sort({ date: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit);
+  try {
+    const measurements = await Users.aggregate([
+      { $match: { _id: userId } },
+      { $unwind: "$measurements" }, // split measurements array
+      {
+        $lookup: {
+          from: "serviceproviders", // collection name in MongoDB
+          localField: "measurements.serviceProviderId",
+          foreignField: "_id",
+          as: "serviceProvider",
+        },
+      },
+      { $unwind: "$serviceProvider" }, // flatten serviceProvider array
+      {
+        $project: {
+          _id: 0,
+          chest: "$measurements.chest",
+          waist: "$measurements.waist",
+          hips: "$measurements.hips",
+          shoulder: "$measurements.shoulder",
+          sleeveLength: "$measurements.sleeveLength",
+          shirtLength: "$measurements.shirtLength",
+          trouserLength: "$measurements.trouserLength",
+          inseam: "$measurements.inseam",
+          neck: "$measurements.neck",
+          notes: "$measurements.notes",
+          serviceProvider: {
+            _id: 1,
+            username: 1,
+            phoneNo: 1,
+            shopAddress: 1,
+            servicesOffered: 1,
+          },
+        },
+      },
+    ]);
 
-  const hasNextPage = page * limit < total;
-
-  res.status(200).json({
-    success: true,
-    measurements,
-    currentPage: page,
-    totalPages: Math.ceil(total / limit),
-    nextPage: hasNextPage ? page + 1 : null
-  });
+    return res.status(200).json({
+      success: true,
+      measurements,
+    });
+  } catch (error) {
+    console.error("Error fetching measurements:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch measurements",
+      error: error.message,
+    });
+  }
 });
 
 export const getMeasurementById = asynchandler(async (req, res) => {

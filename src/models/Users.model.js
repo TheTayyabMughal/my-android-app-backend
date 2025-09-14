@@ -29,13 +29,28 @@ const UserSchema = new Schema(
     refreshToken: {
       type: String,
     },
-    registrationOtp:{type: String},
-    registrationOtpExpiry:{type: Date},
+    registrationOtp: { type: String },
+    registrationOtpExpiry: { type: Date },
     otp: { type: String },
     otpExpiry: { type: Date },
     resetToken: { type: String },
     resetTokenExpiry: { type: Date },
-    isVerified: { type: Boolean, default: false }
+    isVerified: { type: Boolean, default: false },
+    measurements: [
+      {
+        serviceProviderId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceProvider", required: true },
+        chest: { type: Number },
+        waist: { type: Number },
+        hips: { type: Number },
+        shoulder: { type: Number },
+        sleeveLength: { type: Number },
+        shirtLength: { type: Number },
+        trouserLength: { type: Number },
+        inseam: { type: Number },
+        neck: { type: Number },
+        notes: { type: String }
+      }
+    ],
   },
   { timestamps: true }
 );

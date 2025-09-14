@@ -99,26 +99,25 @@ export const createOffer = asynchandler(async (req, res) => {
 
 export const getNearbyOffers = asynchandler(async (req, res) => {
   try {
-    console.log(req.query);
-    const { lat, lng } = req.query; // user location
+    const { lat, lng } = req.query;
     if (!lat || !lng) return res.status(400).json({ message: "Provide lat and lng" });
-
-    // Find providers within 10km radius
+    
+    
     const nearbyProviders = await ServiceProviders.find({
       currentLocation: {
         $geoWithin: {
-          $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371] // 10km radius
+          $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371]
         }
       }
     });
 
     const providerIds = nearbyProviders.map(p => p._id);
 
-    // Get active offers from these providers
+    // Get active offers from these providers and populate all needed fields
     const offers = await Offers.find({
       serviceProvider: { $in: providerIds },
       isActive: true
-    }).populate("serviceProvider", "username profilePic");
+    }).populate("serviceProvider", "username phoneNo shopAddress servicesOffered");
 
     res.json({ offers });
   } catch (err) {
@@ -126,6 +125,7 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 export const toggleOfferById = asynchandler(async (req, res) => {
   const offerId = req.params.id;

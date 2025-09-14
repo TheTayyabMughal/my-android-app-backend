@@ -7,6 +7,7 @@ import { Riders } from "../models/Rider.model.js";
 import { Users } from "../models/Users.model.js";
 import { Measurements } from "../models/Measurements.model.js";
 import Stripe from 'stripe';
+import mongoose from "mongoose";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_your_key');
@@ -16,113 +17,76 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.warn("WARNING: STRIPE_SECRET_KEY environment variable is not set. Using test mode. Payments won't be processed in production.");
 }
 
+const createPaymentIntent = asynchandler(async (req, res) => {
+  const { amount, currency } = req.body;
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency,
+      payment_method_types: ['card'],
+    });
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: err.message });
+  }
+})
+
+
+
+
 // Create order with Stripe payment
 const createOrder = asynchandler(async (req, res) => {
-  const {
-    orders,
-    deliveryAddress,
-    paymentMethod,
-    specialInstructions,
-    priority = "Medium"
-  } = req.body;
+  const userId = req.id; // logged in user ka ID
+  const { serviceProviderId, offerId, services, totalPayment, address, paymentIntentId } = req.body;
 
-  const userId = req.id;
+  try {
+    // Generate unique orderTrackingId
+    const orderTrackingId = await generateUniqueOrderId();
 
-  if (!orders || !Array.isArray(orders) || orders.length === 0) {
-    throw new Apierror(400, "Valid order items are required");
+    // create new order
+    const newOrder = new Orders({
+      userId,
+      serviceProviderId,
+      offerId,
+      services,
+      totalPayment,
+      address,
+      paymentIntentId,
+      status: "pending",
+      orderTrackingId, // only unique id now
+    });
+
+    const savedOrder = await newOrder.save();
+
+    return res.status(201).json({
+      success: true,
+      order: savedOrder,
+    });
+  } catch (error) {
+    console.error("Error creating order:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Order creation failed",
+      error: error.message,
+    });
   }
-
-  // Validate each order item
-  for (const item of orders) {
-    if (!item.ServiceId || !item.ServiceProviderId || !item.name || !item.price) {
-      throw new Apierror(400, "Each order item must contain ServiceId, ServiceProviderId, name, and price");
-    }
-  }
-
-  if (!deliveryAddress || !deliveryAddress.street || !deliveryAddress.city) {
-    throw new Apierror(400, "Valid delivery address with street and city is required");
-  }
-  
-  if (!paymentMethod) {
-    throw new Apierror(400, "Payment method is required");
-  }
-
-  // Calculate total
-  const total = orders.reduce((sum, item) => sum + item.price, 0);
-
-  let paymentIntentId = null;
-  let paymentStatus = "Pending";
-
-  // Handle Stripe payment
-  if (paymentMethod === "stripe" || paymentMethod === "card") {
-    try {
-      // Validate total amount
-      if (!total || total <= 0) {
-        throw new Error("Invalid order total amount");
-      }
-      
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(total * 100), // Stripe expects cents
-        currency: 'usd',
-        metadata: {
-          userId: userId.toString(),
-          orderDescription: `Order for ${orders.length} services`
-        }
-      });
-
-      if (!paymentIntent || !paymentIntent.id) {
-        throw new Error("Failed to create payment intent");
-      }
-
-      paymentIntentId = paymentIntent.id;
-      paymentStatus = paymentIntent.status === 'succeeded' ? 'Paid' : 'Pending';
-      
-    } catch (error) {
-      console.error("Stripe payment error:", error);
-      if (error.type && error.type.startsWith('Stripe')) {
-        throw new Apierror(400, `Payment processing failed: ${error.message}`);
-      } else {
-        throw new Apierror(500, `Payment system error: ${error.message}`);
-      }
-    }
-  }
-
-  // Estimate delivery date (7 days from now for tailoring services)
-  const estimatedDeliveryDate = new Date();
-  estimatedDeliveryDate.setDate(estimatedDeliveryDate.getDate() + 7);
-
-  const order = await Orders.create({
-    user: userId,
-    orders,
-    total,
-    paymentMethod,
-    paymentStatus,
-    stripePaymentIntentId: paymentIntentId,
-    deliveryAddress,
-    estimatedDeliveryDate,
-    specialInstructions,
-    priority,
-    statusHistory: [{
-      status: "Pending",
-      updatedBy: userId,
-      updatedAt: new Date(),
-      note: "Order created"
-    }]
-  });
-
-  const populatedOrder = await Orders.findById(order._id)
-    .populate('user', 'username email')
-    .populate('orders.ServiceId')
-    .populate('orders.ServiceProviderId')
-    .populate('orders.measurements');
-
-  res.status(201).json(
-    new Apiresponse(201, {
-      order: populatedOrder,
-      clientSecret: paymentIntentId ? (await stripe.paymentIntents.retrieve(paymentIntentId)).client_secret : null
-    }, "Order created successfully")
-  );
 });
+
+
+const generateUniqueOrderId = async () => {
+  let unique = false;
+  let orderId;
+
+  while (!unique) {
+    orderId = Math.floor(10000 + Math.random() * 90000); // 5-digit number
+    const exists = await Orders.findOne({ orderTrackingId: orderId });
+    if (!exists) unique = true;
+  }
+
+  return orderId.toString();
+};
+
 
 // Confirm Stripe payment
 const confirmPayment = asynchandler(async (req, res) => {
@@ -135,7 +99,7 @@ const confirmPayment = asynchandler(async (req, res) => {
 
   try {
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    
+
     if (paymentIntent.status === 'succeeded') {
       order.paymentStatus = 'Paid';
       order.status = 'Confirmed';
@@ -160,14 +124,14 @@ const confirmPayment = asynchandler(async (req, res) => {
 
 // Get all orders (Admin only)
 const getAllOrders = asynchandler(async (req, res) => {
-  const { 
-    page = 1, 
-    limit = 10, 
-    status, 
-    paymentStatus, 
+  const {
+    page = 1,
+    limit = 10,
+    status,
+    paymentStatus,
     priority,
     sortBy = 'createdAt',
-    sortOrder = 'desc' 
+    sortOrder = 'desc'
   } = req.query;
 
   const filter = {};
@@ -206,163 +170,188 @@ const getAllOrders = asynchandler(async (req, res) => {
 
 // Get user's orders
 const getUserOrders = asynchandler(async (req, res) => {
-  const userId = req.user._id;
-  const { page = 1, limit = 10, status } = req.query;
+  const userId = req.id;
 
-  const filter = { user: userId };
-  if (status) filter.status = status;
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new Apierror(400, "Invalid User ID");
+  }
 
-  const orders = await Orders.find(filter)
-    .populate('orders.ServiceId')
-    .populate('orders.ServiceProviderId')
-    .populate('rider', 'name phoneNo')
-    .populate('feedback')
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(parseInt(limit));
+  const orders = await Orders.aggregate([
+    { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+    // Lookup service provider to get username
+    {
+      $lookup: {
+        from: "serviceproviders", // MongoDB collection name
+        localField: "serviceProviderId",
+        foreignField: "_id",
+        as: "serviceProvider",
+      },
+    },
+    // Unwind array from lookup
+    { $unwind: "$serviceProvider" },
+    // Project only required fields
+    {
+      $project: {
+        _id: 1,
+        orderTrackingId: 1,
+        services: 1,
+        totalPayment: 1,
+        address: 1,
+        status: 1,
+        createdAt: 1,
+        "serviceProvider.username": 1,
+      },
+    },
+    { $sort: { createdAt: -1 } },
+  ]);
 
-  const total = await Orders.countDocuments(filter);
-
-  res.status(200).json(
-    new Apiresponse(200, {
-      orders,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
-        totalOrders: total
-      }
-    }, "User orders fetched successfully")
-  );
+  res.status(200).json(new Apiresponse(200, orders, "User orders fetched successfully"));
+  
 });
 
 // Get orders for service provider
 const getProviderOrders = asynchandler(async (req, res) => {
-  const userId = req.user._id;
-  
-  // Get the service provider info
-  const provider = await ServiceProviders.findOne({ user: userId });
-  if (!provider) {
-    throw new Apierror(404, "Service provider not found");
-  }
+  const userId = req.id; // service provider id
 
-  const { page = 1, limit = 10, status } = req.query;
+  try {
+    const orders = await Orders.aggregate([
+      { $match: { serviceProviderId: new mongoose.Types.ObjectId(userId) } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" }, // user array ko single object me convert kare
+      {
+        $project: {
+          services: 1,
+          totalPayment: 1,
+          address: 1,
+          status: 1,
+          userId: 1,
+          orderTrackingId: 1,
+          "user.measurements": 1,
+          "user.username": 1,
+        },
+      },
+    ]);
 
-  const filter = { 'orders.ServiceProviderId': provider._id };
-  if (status) filter.status = status;
-
-  const orders = await Orders.find(filter)
-    .populate('user', 'username email')
-    .populate('orders.ServiceId')
-    .populate('orders.ServiceProviderId')
-    .populate('rider', 'name phoneNo')
-    .populate('feedback')
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(parseInt(limit));
-
-  const total = await Orders.countDocuments(filter);
-
-  res.status(200).json(
-    new Apiresponse(200, {
+    res.status(200).json({
+      success: true,
       orders,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
-        totalOrders: total
-      }
-    }, "Provider orders fetched successfully")
-  );
-});
-
-// Get order by ID
-const getOrderById = asynchandler(async (req, res) => {
-  const { id } = req.params;
-
-  const order = await Orders.findById(id)
-    .populate('user', 'username email')
-    .populate('orders.ServiceId')
-    .populate('orders.ServiceProviderId')
-    .populate('orders.measurements')
-    .populate('rider', 'name phoneNo')
-    .populate('feedback')
-    .populate('statusHistory.updatedBy', 'username');
-
-  if (!order) {
-    throw new Apierror(404, "Order not found");
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
-
-  // Check if user has permission to view this order
-  const isAdmin = req.user.role === 'admin';
-  const isOrderOwner = order.user._id.toString() === req.user._id.toString();
-  
-  // Find if the user is the service provider for any order item
-  let isServiceProvider = false;
-  if (!isAdmin && !isOrderOwner) {
-    // Get provider ID for current user
-    const provider = await ServiceProviders.findOne({ user: req.user._id });
-    
-    if (provider) {
-      isServiceProvider = order.orders.some(item => 
-        item.ServiceProviderId && 
-        item.ServiceProviderId._id && 
-        item.ServiceProviderId._id.toString() === provider._id.toString()
-      );
-    }
-  }
-  
-  if (!isAdmin && !isOrderOwner && !isServiceProvider) {
-    throw new Apierror(403, "Access denied");
-  }
-
-  res.status(200).json(
-    new Apiresponse(200, order, "Order fetched successfully")
-  );
 });
 
 // Update order status
 const updateOrderStatus = asynchandler(async (req, res) => {
-  const { id } = req.params;
-  const { status, note } = req.body;
-  const updatedBy = req.user._id;
+  const { orderTrackingId } = req.params;
+  const { status } = req.body;
 
+  // Validate incoming status
   const validStatuses = [
-    "Pending", "Confirmed", "Processing", "Ready for Pickup", 
-    "Out for Delivery", "Delivered", "Cancelled", "Refunded"
+    "pending",
+    "processing",
+    "ready for Pickup",
+    "out for Delivery",
+    "delivered",
+    "cancelled",
   ];
 
   if (!validStatuses.includes(status)) {
-    throw new Apierror(400, "Invalid status");
+    return res.status(400).json({
+      success: false,
+      message: `Invalid status. Valid options: ${validStatuses.join(", ")}`,
+    });
   }
 
-  const order = await Orders.findById(id);
+  try {
+    const updatedOrder = await Orders.findOneAndUpdate(
+      { orderTrackingId },
+      { status },
+      { new: true, runValidators: true }
+    ); // no .select(), updates whole document
+
+    if (!updatedOrder) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+    }); // only success message, no order data returned
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update order status",
+    });
+  }
+});
+
+
+const addMeasurements = asynchandler(async (req, res) => {
+  const { orderTrackingId } = req.params;
+  const { measurements } = req.body;
+  const serviceProviderId = req.id; // ensure ye ObjectId ho
+
+  if (!mongoose.Types.ObjectId.isValid(serviceProviderId)) {
+    throw new Apierror(400, "Invalid Service Provider ID");
+  }
+
+  // Find the order
+  const order = await Orders.findOne({ orderTrackingId });
   if (!order) {
     throw new Apierror(404, "Order not found");
   }
 
-  // Update status and add to history
-  order.status = status;
-  order.statusHistory.push({
-    status,
-    updatedBy,
-    updatedAt: new Date(),
-    note
-  });
-
-  // Set actual delivery date if delivered
-  if (status === "Delivered") {
-    order.actualDeliveryDate = new Date();
+  // Find the user
+  const user = await Users.findById(order.userId);
+  if (!user) {
+    throw new Apierror(404, "User not found");
   }
 
-  await order.save();
+  // Initialize measurements array if not present
+  if (!Array.isArray(user.measurements)) {
+    user.measurements = [];
+  }
 
-  const updatedOrder = await Orders.findById(id)
-    .populate('user', 'username email')
-    .populate('statusHistory.updatedBy', 'username');
+  // Check if measurement already exists for this service provider
+  const existingIndex = user.measurements.findIndex(
+    (m) => m.serviceProviderId.toString() === serviceProviderId
+  );
+
+  if (existingIndex >= 0) {
+    // Update existing measurement
+    user.measurements[existingIndex] = {
+      ...user.measurements[existingIndex],
+      ...measurements,
+      serviceProviderId,
+    };
+  } else {
+    // Add new measurement
+    user.measurements.push({
+      serviceProviderId,
+      ...measurements,
+    });
+  }
+
+  await user.save();
 
   res.status(200).json(
-    new Apiresponse(200, updatedOrder, "Order status updated successfully")
+    new Apiresponse(200, user.measurements, "Measurements added/updated successfully")
   );
 });
+
 
 // Assign rider to order
 const assignRider = asynchandler(async (req, res) => {
@@ -390,11 +379,11 @@ const assignRider = asynchandler(async (req, res) => {
 
   // Check if any order item belongs to the rider's service provider
   if (rider.serviceProvider) {
-    const hasValidServiceProvider = order.orders.some(item => 
-      item.ServiceProviderId && 
+    const hasValidServiceProvider = order.orders.some(item =>
+      item.ServiceProviderId &&
       item.ServiceProviderId.toString() === rider.serviceProvider._id.toString()
     );
-    
+
     if (!hasValidServiceProvider && req.user.role !== 'admin') {
       throw new Apierror(400, "Rider must belong to one of the service providers in the order");
     }
@@ -443,7 +432,7 @@ const cancelOrder = asynchandler(async (req, res) => {
         payment_intent: order.stripePaymentIntentId,
         reason: 'requested_by_customer'
       });
-      
+
       if (refund && refund.status === 'succeeded') {
         order.paymentStatus = "Refunded";
         console.log(`Successfully processed refund for order ${id}`);
@@ -453,7 +442,7 @@ const cancelOrder = asynchandler(async (req, res) => {
       }
     } catch (error) {
       console.error("Refund failed:", error);
-      
+
       // Add note about failed refund but continue with cancellation
       order.statusHistory.push({
         status: "Refund Failed",
@@ -461,7 +450,7 @@ const cancelOrder = asynchandler(async (req, res) => {
         updatedAt: new Date(),
         note: `Refund attempted but failed: ${error.message}`
       });
-      
+
       // Continue with cancellation even if refund fails
     }
   }
@@ -484,7 +473,7 @@ const cancelOrder = asynchandler(async (req, res) => {
 // Get order analytics (Admin only)
 const getOrderAnalytics = asynchandler(async (req, res) => {
   const { startDate, endDate } = req.query;
-  
+
   const dateFilter = {};
   if (startDate && endDate) {
     dateFilter.createdAt = {
@@ -541,6 +530,26 @@ const getOrderAnalytics = asynchandler(async (req, res) => {
   );
 });
 
+const getOrderById = asynchandler(async (req, res) => {
+  const { id } = req.params;
+
+  const order = await Orders.findById(id)
+    .populate('user', 'username email')
+    .populate('serviceProviderId', 'name contactInfo')
+    .populate('offerId', 'title discount')
+    .populate('services')
+    .populate('rider', 'name phoneNo')
+    .populate('statusHistory.updatedBy', 'username email');
+
+  if (!order) {
+    throw new Apierror(404, "Order not found");
+  }
+
+  res.status(200).json(
+    new Apiresponse(200, order, "Order details fetched successfully")
+  );
+});
+
 export {
   createOrder,
   confirmPayment,
@@ -551,5 +560,7 @@ export {
   updateOrderStatus,
   assignRider,
   cancelOrder,
-  getOrderAnalytics
+  getOrderAnalytics,
+  addMeasurements,
+  createPaymentIntent
 };
