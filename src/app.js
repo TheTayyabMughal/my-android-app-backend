@@ -37,5 +37,9 @@ app.use("/api/v1/measurements",measurementRoute)
 app.use("/api/v1/orders",ordersRoute)
 app.use("/api/v1/payments",paymentRoute)
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend is running fine!");
+});
+
 
 export default app;
