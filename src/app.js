@@ -38,4 +38,4 @@ app.use("/api/v1/orders",ordersRoute)
 app.use("/api/v1/payments",paymentRoute)
 
 
-export { app };
+export default app;

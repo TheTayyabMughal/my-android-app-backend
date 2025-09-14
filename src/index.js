@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import connectDB from "../src/db/db.js";
-import { app } from "./app.js";
+import app from "./app.js";
 import mongoose from "mongoose";
 import { Services } from "./models/Services.model.js"; // path adjust karo
 import nodemailer from "nodemailer";
