@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import {DB_NAME} from "../constants.js"
-import { initializeServices } from "../utils/initDb.js";
+import { initializeServices } from "../utils/InitDb.js";
 
 const connectDB=async()=>{
     try {
@@ -8,7 +8,7 @@ const connectDB=async()=>{
         await initializeServices();
     console.log(`\n mongodb connected successfully`);
     } catch (error) {
-        console.log("Error : ",err);
+        console.log("Error : ",error);
         process.exit(1);   
     }
 }
