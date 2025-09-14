@@ -4,7 +4,7 @@ import { initializeServices } from "../utils/initDb.js";
 
 const connectDB=async()=>{
     try {
-        const connectioninstance=await mongoose.connect(`${process.env.MONGODB_URI}/${DB_NAME}`)
+        const connectioninstance=await mongoose.connect(`${process.env.MONGODB_URI}`)
         await initializeServices();
     console.log(`\n mongodb connected successfully`);
     } catch (error) {

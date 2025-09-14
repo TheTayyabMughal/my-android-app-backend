@@ -1,5 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
+import crypto from "crypto"
 
 const ServiceProviderSchema = new Schema(
   {
@@ -18,14 +19,13 @@ const ServiceProviderSchema = new Schema(
       type: String,
       required: true,
     },
-    CNIC: {
-      type: String,
-    },
     email: {
       type: String,
       required: true,
       unique: true,
     },
+    otp: { type: String },
+    otpExpiry: { type: Date },
     password: {
       type: String,
       required: true,
@@ -68,6 +68,7 @@ ServiceProviderSchema.methods.generateAccessToken = function () {
     }
   );
 };
+
 
 ServiceProviderSchema.methods.generateRefreshToken = function () {
   return jwt.sign(

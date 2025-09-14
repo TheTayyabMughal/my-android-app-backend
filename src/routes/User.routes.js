@@ -13,6 +13,7 @@ import {
   forgotPassword,
   resetPassword,
   verifyRegistrationOtp,
+  getProfileInfo,
   registerProvider
 } from "../Controllers/User.controller.js";
 import { upload } from "../middlewares/Multer.middleware.js";
@@ -24,7 +25,7 @@ router
   .post(registerUser);
 
 router.route("/verify-registration-otp").post(verifyRegistrationOtp);
-
+router.route("/profile").get(verifyJWT,getProfileInfo)
 router.route("/login").post(Loginuser);
 router.route("/register/provider").post(registerProvider);
 router.route("/verify-otp").post(verifyOtp);

@@ -8,6 +8,7 @@ import { Users } from "../models/Users.model.js";
 import { Measurements } from "../models/Measurements.model.js";
 import Stripe from 'stripe';
 import mongoose from "mongoose";
+import nodemailer from "nodemailer";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_your_key');
@@ -32,19 +33,46 @@ const createPaymentIntent = asynchandler(async (req, res) => {
   }
 })
 
+const sendEmailwithHTML = async (to, subject, html) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: true, // for port 465
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: `"Tailorwash" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html, // Using HTML for professional email
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Email sent successfully:", info.messageId);
+    return info;
+  } catch (error) {
+    console.error("❌ Email send failed:", error.message);
+    throw error;
+  }
+};
+
 
 
 
 // Create order with Stripe payment
 const createOrder = asynchandler(async (req, res) => {
-  const userId = req.id; // logged in user ka ID
+  const userId = req.id;
   const { serviceProviderId, offerId, services, totalPayment, address, paymentIntentId } = req.body;
 
   try {
-    // Generate unique orderTrackingId
+    // Generate unique tracking ID
     const orderTrackingId = await generateUniqueOrderId();
 
-    // create new order
     const newOrder = new Orders({
       userId,
       serviceProviderId,
@@ -54,10 +82,40 @@ const createOrder = asynchandler(async (req, res) => {
       address,
       paymentIntentId,
       status: "pending",
-      orderTrackingId, // only unique id now
+      orderTrackingId,
     });
 
     const savedOrder = await newOrder.save();
+
+    // ✅ Send confirmation email after saving
+    try {
+      await sendEmailwithHTML(
+        savedOrder.address.email,
+        `Order Confirmation - Tracking ID: ${savedOrder.orderTrackingId}`,
+        `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #4CAF50;">Order Confirmed ✅</h2>
+          <p>Hi,</p>
+          <p>Thank you for placing your order with <strong>Tailorwash</strong>! Here are your order details:</p>
+          <p><strong>Tracking ID:</strong> ${savedOrder.orderTrackingId}</p>
+          <p><strong>Total Payment:</strong> $${savedOrder.totalPayment}</p>
+          <h3>Ordered Services:</h3>
+          <ul>
+            ${savedOrder.services
+              .map(
+                (service) =>
+                  `<li>${service.name} - Qty: ${service.quantity} - $${service.price}</li>`
+              )
+              .join("")}
+          </ul>
+          <p>We will notify you as soon as the status of your order changes.</p>
+          <p style="margin-top: 20px;">Thanks,<br/>Team Tailorwash</p>
+        </div>
+        `
+      );
+    } catch (emailErr) {
+      console.error("⚠️ Failed to send order confirmation email:", emailErr.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -206,7 +264,7 @@ const getUserOrders = asynchandler(async (req, res) => {
   ]);
 
   res.status(200).json(new Apiresponse(200, orders, "User orders fetched successfully"));
-  
+
 });
 
 // Get orders for service provider
@@ -249,12 +307,38 @@ const getProviderOrders = asynchandler(async (req, res) => {
   }
 });
 
+const sendEmail = async (to, subject, text) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: true, // SSL for port 465
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: `"Tailorwash" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      text,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Email sent successfully:", info.messageId);
+    return info;
+  } catch (error) {
+    console.error("❌ Email send failed:", error.message);
+    throw error;
+  }
+};
 // Update order status
 const updateOrderStatus = asynchandler(async (req, res) => {
   const { orderTrackingId } = req.params;
   const { status } = req.body;
 
-  // Validate incoming status
   const validStatuses = [
     "pending",
     "processing",
@@ -272,11 +356,12 @@ const updateOrderStatus = asynchandler(async (req, res) => {
   }
 
   try {
+    // Find and update order
     const updatedOrder = await Orders.findOneAndUpdate(
       { orderTrackingId },
       { status },
       { new: true, runValidators: true }
-    ); // no .select(), updates whole document
+    );
 
     if (!updatedOrder) {
       return res.status(404).json({
@@ -285,10 +370,22 @@ const updateOrderStatus = asynchandler(async (req, res) => {
       });
     }
 
+    // Send email notification
+    try {
+      await sendEmail(
+        updatedOrder.address.email,
+        `Order Status Update: ${updatedOrder.orderTrackingId}`,
+        `Hello,\n\nYour order with Tracking ID ${updatedOrder.orderTrackingId} is now "${status}".\n\nThank you for using Tailorwash!`
+      );
+    } catch (emailErr) {
+      console.error("⚠️ Failed to send order status email:", emailErr.message);
+      // Continue even if email fails (don’t block response)
+    }
+
     res.status(200).json({
       success: true,
-      message: "Order status updated successfully",
-    }); // only success message, no order data returned
+      message: "Order status updated and email sent (if possible)",
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({

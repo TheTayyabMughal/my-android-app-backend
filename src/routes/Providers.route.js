@@ -6,11 +6,15 @@ import {
   updateServiceProvider,
   deleteServiceProvider,
   getServiceProviderHistoryById,
-  getNearestServiceProviders
+  getNearestServiceProviders,
+  getProviderProfile
 } from "../Controllers/ServiceProviders.controller.js";
 import { verifyAdmin, verifyJWT } from "../middlewares/Authentication.middleware.js";
 
 const router = Router();
+// used component 
+
+router.route("/getProfile").get(verifyJWT,getProviderProfile)
 
 router.route("/getAll").get(getAllServiceProviders);
 router.route("/getbyid/:id").get(getServiceProviderById);

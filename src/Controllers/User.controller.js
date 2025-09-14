@@ -8,6 +8,7 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { Users } from "../models/Users.model.js";
 import { ServiceProviders } from "../models/ServiceProviders.model.js";
+import crypto from "crypto"
 
 dotenv.config();
 
@@ -205,6 +206,38 @@ const verifyRegistrationOtp = asynchandler(async (req, res) => {
   return res.status(200).json(new Apiresponse(200, createdUser, "User Registered & Verified Successfully"));
 });
 
+const getProfileInfo = async (req, res) => {
+  try {
+    const userId = req.id; 
+    
+    const user = await Users.findById(userId).select('username email');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+    
+    // Return the user profile information
+    return res.status(200).json({
+      success: true,
+      data: {
+        username: user.username,
+        email: user.email
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error fetching profile info:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+
 
 const sendOtp = async (user) => {
   const otp = ("" + Math.random()).substring(2, 6);
@@ -223,21 +256,72 @@ const sendOtp = async (user) => {
   await transporter.sendMail(mailOptions);
 };
 
+const sendEmail = async (to, subject, message, actionText = null, actionUrl = null) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    // 2️⃣ Professional HTML Template
+    const htmlTemplate = `
+      <div style="font-family: Arial, sans-serif; background:#f6f6f6; padding:20px;">
+        <div style="max-width:600px; margin:auto; background:white; padding:20px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1)">
+          <h2 style="color:#333; text-align:center;">${subject}</h2>
+          <p style="font-size:16px; color:#555;">${message}</p>
+          ${actionText && actionUrl
+        ? `<div style="text-align:center; margin:20px 0;">
+                   <a href="${actionUrl}" style="background:#007BFF; color:white; text-decoration:none; padding:10px 20px; border-radius:5px; font-size:16px;">
+                     ${actionText}
+                   </a>
+                 </div>`
+        : ""
+      }
+          <p style="font-size:12px; color:#999; text-align:center; margin-top:20px;">
+            If you didn’t request this, please ignore this email.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // 3️⃣ Mail Options
+    const mailOptions = {
+      from: "TailorWash",
+      to,
+      subject,
+      text: message, // fallback for email clients that don't support HTML
+      html: htmlTemplate,
+    };
+
+    // 4️⃣ Send Email
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Email sent to ${to}: ${info.messageId}`);
+    return info;
+  } catch (error) {
+    console.error("❌ Failed to send email:", error);
+    throw error;
+  }
+};
+
+// Loginuser function
 const Loginuser = asynchandler(async (req, res) => {
   const { email, password, role } = req.body;
   if (!email) throw new Apierror(400, "Email is required");
   if (!password) throw new Apierror(400, "Password is required");
   if (!role) throw new Apierror(400, "Role is required");
 
-  // Validate role
-  const allowedRoles = ["customer", "provider"]; // add more roles here if needed
+  const allowedRoles = ["customer", "provider"];
   if (!allowedRoles.includes(role)) throw new Apierror(400, "Invalid role");
 
-  // Find user based on role
   let user;
   if (role === "customer") {
     user = await Users.findOne({ email: email.toLowerCase() });
-  } else if (role === "provider") {
+  } else {
     user = await ServiceProviders.findOne({ email: email.toLowerCase() });
   }
 
@@ -247,31 +331,72 @@ const Loginuser = asynchandler(async (req, res) => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json(new Apiresponse(401, null, "Invalid credentials"));
 
-  // Generate tokens
+  // ✅ Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // ✅ Hash OTP with SHA-256, convert to lowercase
+  const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex").toLowerCase();
+
+  // ✅ Store hashed OTP and expiry
+  user.otp = hashedOTP;
+  user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+  await user.save({ validateBeforeSave: false });
+
+  // Send plain OTP via email/SMS
+  await sendEmail(user.email, "Your OTP Code", `Your login OTP is: ${otp}`);
+
+  return res.status(200).json(
+    new Apiresponse(
+      200,
+      { userId: user._id, role, email: user.email },
+      "Login successful. OTP sent to your email."
+    )
+  );
+});
+
+
+const verifyOtp = asynchandler(async (req, res) => {
+  const { userId, otp, role } = req.body;
+  if (!otp) throw new Apierror(400, "OTP is required");
+
+  const trimmedOtp = otp.toString().trim();
+
+  let user;
+  if (role === "provider") {
+    user = await ServiceProviders.findById(userId);
+  } else {
+    user = await Users.findById(userId);
+  }
+
+  if (!user) throw new Apierror(400, "User not found");
+
+  // ✅ Hash entered OTP
+  const hashedOTP = crypto.createHash("sha256").update(trimmedOtp).digest("hex").toLowerCase();
+
+  // ✅ Ensure DB OTP is lowercase + trimmed
+  const dbOTP = (user.otp || "").toString().trim().toLowerCase();
+
+
+  if (!dbOTP) throw new Apierror(400, "No OTP found. Please request a new one.");
+  if (dbOTP !== hashedOTP) throw new Apierror(400, "Invalid OTP");
+  if (Date.now() > new Date(user.otpExpiry).getTime()) throw new Apierror(400, "OTP expired");
+
+  // ✅ OTP verified -> clear fields
+  user.otp = undefined;
+  user.otpExpiry = undefined;
+  await user.save({ validateBeforeSave: false });
+
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id, role);
 
-  // Send response including role
   res.status(200).json(
     new Apiresponse(200, { accessToken, refreshToken, role }, "Logged in successfully")
   );
-  // await sendOtp(user);
-  //res.status(200).json({ message: "OTP sent to email" });
 });
 
-const verifyOtp = asynchandler(async (req, res) => {
-  console.log("Verifying OTP with data:", req.body);
-  const { email, otp } = req.body;
-  const user = await Users.findOne({ email });
-  if (!user) {
-    throw new Apierror(400, "User not found");
-  }
-  if (user.otp !== otp || Date.now() > user.otpExpiry) {
-    throw new Apierror(400, "Invalid or expired OTP");
-  }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
-  res.status(200).json(new Apiresponse(200, { accessToken, refreshToken }, "Logged in successfully"));
-});
+
+
+
 
 
 const registerProvider = asynchandler(async (req, res) => {
@@ -504,5 +629,5 @@ const updateInfo = asynchandler(async (req, res) => {
   );
 });
 
-export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider };
+export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider,getProfileInfo };
 
