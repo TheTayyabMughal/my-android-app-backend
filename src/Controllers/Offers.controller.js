@@ -100,32 +100,75 @@ export const createOffer = asynchandler(async (req, res) => {
 export const getNearbyOffers = asynchandler(async (req, res) => {
   try {
     const { lat, lng } = req.query;
-    if (!lat || !lng) return res.status(400).json({ message: "Provide lat and lng" });
-    
-    
+    if (!lat || !lng) {
+      return res.status(400).json({ message: "Provide lat and lng" });
+    }
+
+    // ✅ Find nearby providers
     const nearbyProviders = await ServiceProviders.find({
       profileStatus: true,
       currentLocation: {
         $geoWithin: {
-          $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371]
-        }
-      }
+          $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371], // 10km radius
+        },
+      },
     });
 
-    const providerIds = nearbyProviders.map(p => p._id);
+    const providerIds = nearbyProviders.map((p) => p._id);
 
-    // Get active offers from these providers and populate all needed fields
+    // ✅ Find offers and populate provider details
     const offers = await Offers.find({
       serviceProvider: { $in: providerIds },
-      isActive: true
-    }).populate("serviceProvider", "username phoneNo shopAddress servicesOffered");
+      isActive: true,
+    }).populate(
+      "serviceProvider",
+      "username phoneNo shopAddress servicesOffered currentLocation"
+    );
 
-    res.json({ offers });
+    // ✅ Group offers by serviceProvider
+    const groupedOffers = offers.reduce((acc, offer) => {
+      const provider = offer.serviceProvider;
+      const providerId = provider._id.toString();
+
+      // Find existing provider group
+      let group = acc.find((g) => g.provider._id.toString() === providerId);
+
+      if (!group) {
+        group = {
+          provider: {
+            _id: provider._id,
+            username: provider.username,
+            phoneNo: provider.phoneNo,
+            shopAddress: provider.shopAddress,
+            servicesOffered: provider.servicesOffered,
+            location: provider.currentLocation.coordinates,
+          },
+          offers: [],
+        };
+        acc.push(group);
+      }
+
+      // Push offer details
+      group.offers.push({
+        _id: offer._id,
+        title: offer.title,
+        description: offer.description,
+        discountPercentage: offer.discountPercentage,
+        servicesIncluded: offer.servicesIncluded,
+      });
+
+      return acc;
+    }, []);
+
+    return res.json({ groupedOffers });
   } catch (err) {
-    console.error(err);
+    console.error("❌ getNearbyOffers Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
+
 
 export const getProviderProfileStatus = asynchandler(async (req, res) => {
   const userId = req.id;
@@ -147,7 +190,6 @@ export const getProviderProfileStatus = asynchandler(async (req, res) => {
 export const toggleProfileStatus = asynchandler(async (req, res) => {
   const userId = req.id; 
   const { isActive } = req.body;
-  console.log("isActive: ",req.body)
   try {
     const user = await ServiceProviders.findById(userId);
     if (!user) {
