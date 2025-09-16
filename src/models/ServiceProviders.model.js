@@ -1,6 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import crypto from "crypto"
+import { type } from "os";
 
 const ServiceProviderSchema = new Schema(
   {
@@ -38,8 +39,16 @@ const ServiceProviderSchema = new Schema(
       required: true,
     },
     servicesOffered: {
-      type: [String], // ✅ You are storing services as an array of string
+      type: [String],
       required: true,
+    },
+    profileStatus: {
+      type: Boolean,
+      default: true
+    },
+    approvalFromAdmin:{
+      type:Boolean,
+      default:false
     },
     user: {
       type: Schema.Types.ObjectId,

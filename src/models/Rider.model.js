@@ -17,9 +17,9 @@ const Riderschema = new Schema(
         type: String,
         required: true,
     },
-    profilePic:{
-      type:String,
-    },
+    // profilePic:{
+    //   type:String,
+    // },
     serviceProvider: 
       {
         type: Schema.Types.ObjectId,

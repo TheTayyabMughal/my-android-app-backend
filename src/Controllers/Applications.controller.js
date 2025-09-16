@@ -79,7 +79,7 @@ export const verifyApplicationOtp = asynchandler(async (req, res) => {
 // export const createApplication = asynchandler(async (req, res) => {
 //   const { username, CNIC, email, password, shopAddress, servicesOffered, phoneNo,longitude,
 //     latitude } = req.body;
-  
+
 //   if (!username || !email || !password  || !shopAddress || !servicesOffered || !phoneNo) {
 //     throw new Apierror(400, "All fields are required");
 //   }
@@ -108,8 +108,39 @@ export const verifyApplicationOtp = asynchandler(async (req, res) => {
 // });
 
 export const getAllApplications = asynchandler(async (req, res) => {
-  const applications = await Applications.find().populate("servicesOffered");
-  res.status(200).json(new Apiresponse(200, applications, "Applications fetched successfully"));
+  try {
+    const applications = await ServiceProviders.aggregate([
+      {
+        $lookup: {
+          from: "services",             // Services collection name
+          localField: "servicesOffered", // This contains string values
+          foreignField: "name",         // Match with the name field in services collection
+          as: "servicesDetails"         // Store the matched services
+        }
+      },
+      {
+        $project: {
+          username: 1,
+          email: 1,
+          phoneNo: 1,
+          shopAddress: 1,
+          profileStatus: 1,
+          approvalFromAdmin: 1,
+          profilePic: 1,
+        }
+      }
+    ]);
+
+
+    res.status(200).json(
+      new Apiresponse(200, applications, "Applications fetched successfully")
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).json(
+      new Apiresponse(500, null, "Failed to fetch applications")
+    );
+  }
 });
 
 export const getAllPendingApplications = asynchandler(async (req, res) => {
@@ -136,19 +167,25 @@ export const getApplicationById = asynchandler(async (req, res) => {
 
 
 export const updateApplication = asynchandler(async (req, res) => {
-  const { status, ...updateData } = req.body;
+  try {
+    console.log("Helo")
+    const { id } = req.params;
+    const { approvalFromAdmin } = req.body;
 
-  const application = await Applications.findByIdAndUpdate(
-    req.params.id,
-    { $set: { ...updateData, ...(status && { status }) } },
-    { new: true }
-  );
+    // Check if application exists
+    const application = await ServiceProviders.findById(id);
+    if (!application) {
+      return res.status(404).json({ message: "Application not found" });
+    }
 
-  if (!application) {
-    throw new Apierror(404, "Application not found");
+    application.approvalFromAdmin = approvalFromAdmin;
+    await application.save();
+
+    res.status(200).json({ message: "Status updated successfully", application });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
   }
-
-  res.status(200).json(new Apiresponse(200, application, "Application updated successfully"));
 });
 
 
@@ -189,7 +226,7 @@ export const updateApplicationStatus = asynchandler(async (req, res) => {
     });
 
     createdProvider = await ServiceProviders.create({
-      CNIC:application.CNIC || " ",
+      CNIC: application.CNIC || " ",
       username: application.username,
       email: application.email,
       shopAddress: application.shopAddress,
@@ -197,9 +234,9 @@ export const updateApplicationStatus = asynchandler(async (req, res) => {
       servicesOffered: application.servicesOffered,
       user: createdUser._id,
       location: {
-      type: "Point",
-      coordinates: [parseFloat(application.location.coordinates[0]), parseFloat(application.location.coordinates[1])]
-    }
+        type: "Point",
+        coordinates: [parseFloat(application.location.coordinates[0]), parseFloat(application.location.coordinates[1])]
+      }
     });
   }
 

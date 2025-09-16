@@ -104,6 +104,7 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
     
     
     const nearbyProviders = await ServiceProviders.find({
+      profileStatus: true,
       currentLocation: {
         $geoWithin: {
           $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371]
@@ -123,6 +124,46 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+export const getProviderProfileStatus = asynchandler(async (req, res) => {
+  const userId = req.id;
+
+  try {
+    const user = await ServiceProviders.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" }); 
+    }
+
+    res.status(200).json({ status: user.profileStatus });
+  } catch (err) {
+    console.error("Error in getProviderProfileStatus:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+export const toggleProfileStatus = asynchandler(async (req, res) => {
+  const userId = req.id; 
+  const { isActive } = req.body;
+  console.log("isActive: ",req.body)
+  try {
+    const user = await ServiceProviders.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.profileStatus = isActive;
+    await user.save();
+
+    return res.status(200).json({
+      message: "Profile status updated successfully",
+      status: user.profileStatus,
+    });
+  } catch (err) {
+    console.error("Error in toggleProfileStatus:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
 

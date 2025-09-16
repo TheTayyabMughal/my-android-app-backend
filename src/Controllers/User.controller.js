@@ -9,6 +9,7 @@ import dotenv from "dotenv";
 import { Users } from "../models/Users.model.js";
 import { ServiceProviders } from "../models/ServiceProviders.model.js";
 import crypto from "crypto"
+import mongoose from "mongoose";
 
 dotenv.config();
 
@@ -27,9 +28,10 @@ const generateAccessAndRefreshTokens = async (userId, role) => {
     let user;
     if (role === "provider") {
       user = await ServiceProviders.findById(userId);
-    } else {
+    } else if (role === "customer") {
       user = await Users.findById(userId); // default: customer
     }
+
 
     if (!user) {
       throw new Apierror(404, `No ${role} found with the given ID`);
@@ -208,17 +210,17 @@ const verifyRegistrationOtp = asynchandler(async (req, res) => {
 
 const getProfileInfo = async (req, res) => {
   try {
-    const userId = req.id; 
-    
+    const userId = req.id;
+
     const user = await Users.findById(userId).select('username email');
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found"
       });
     }
-    
+
     // Return the user profile information
     return res.status(200).json({
       success: true,
@@ -227,7 +229,7 @@ const getProfileInfo = async (req, res) => {
         email: user.email
       }
     });
-    
+
   } catch (error) {
     console.error("Error fetching profile info:", error);
     return res.status(500).json({
@@ -315,21 +317,58 @@ const Loginuser = asynchandler(async (req, res) => {
   if (!password) throw new Apierror(400, "Password is required");
   if (!role) throw new Apierror(400, "Role is required");
 
-  const allowedRoles = ["customer", "provider"];
+  const allowedRoles = ["customer", "provider", "Admin"];
   if (!allowedRoles.includes(role)) throw new Apierror(400, "Invalid role");
 
   let user;
+
   if (role === "customer") {
     user = await Users.findOne({ email: email.toLowerCase() });
-  } else {
+  } 
+  else if (role === "provider") {
     user = await ServiceProviders.findOne({ email: email.toLowerCase() });
+
+    // ✅ Check if provider account is approved by admin
+    if (user && user.approvalFromAdmin === false) {
+      return res
+        .status(403)
+        .json(new Apiresponse(403, null, "Your account is not yet approved by admin."));
+    }
+  }
+  else if (role === "Admin") {
+    if (
+      email === process.env.ADMIN_EMAIL &&
+      password === process.env.ADMIN_PASSWORD
+    ) {
+      const accessToken = jwt.sign(
+        { role: "Admin" },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
+      );
+      const refreshToken = jwt.sign(
+        { role: "Admin" },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
+      );
+      return res
+        .status(200)
+        .json(
+          new Apiresponse(200, { accessToken, refreshToken, role }, "Logged in successfully")
+        );
+    } else {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
   }
 
   if (!user) throw new Apierror(400, "User not found, please sign up first");
 
   // Compare password
   const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(401).json(new Apiresponse(401, null, "Invalid credentials"));
+  if (!isMatch) {
+    return res
+      .status(401)
+      .json(new Apiresponse(401, null, "Invalid credentials"));
+  }
 
   // ✅ Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -355,6 +394,7 @@ const Loginuser = asynchandler(async (req, res) => {
 });
 
 
+
 const verifyOtp = asynchandler(async (req, res) => {
   const { userId, otp, role } = req.body;
   if (!otp) throw new Apierror(400, "OTP is required");
@@ -376,12 +416,10 @@ const verifyOtp = asynchandler(async (req, res) => {
   // ✅ Ensure DB OTP is lowercase + trimmed
   const dbOTP = (user.otp || "").toString().trim().toLowerCase();
 
-
   if (!dbOTP) throw new Apierror(400, "No OTP found. Please request a new one.");
   if (dbOTP !== hashedOTP) throw new Apierror(400, "Invalid OTP");
   if (Date.now() > new Date(user.otpExpiry).getTime()) throw new Apierror(400, "OTP expired");
 
-  // ✅ OTP verified -> clear fields
   user.otp = undefined;
   user.otpExpiry = undefined;
   await user.save({ validateBeforeSave: false });
@@ -401,9 +439,9 @@ const verifyOtp = asynchandler(async (req, res) => {
 
 const registerProvider = asynchandler(async (req, res) => {
   try {
+
     const { username, email, password, services, phoneNo, shopAddress, currentLocation } = req.body;
 
-    // Validation
     if (!username || !email || !password || !phoneNo || !shopAddress || !currentLocation) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
@@ -412,19 +450,16 @@ const registerProvider = asynchandler(async (req, res) => {
       return res.status(400).json({ success: false, message: "At least one service is required" });
     }
 
-    // Check for existing provider
     const existingProvider = await ServiceProviders.findOne({
-      $or: [{ username: username.toLowerCase() }, { email }]
+      $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }]
     });
 
     if (existingProvider) {
       return res.status(400).json({ success: false, message: "Service provider already exists" });
     }
 
-    // Hash password (only if schema does not handle it)
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    await ServiceProviders.create({
+    const newProvider = await ServiceProviders.create({
       username: username.toLowerCase(),
       password: hashedPassword,
       email: email.toLowerCase(),
@@ -434,15 +469,23 @@ const registerProvider = asynchandler(async (req, res) => {
       phoneNo,
     });
 
-    return res
-      .status(201)
-      .json({ success: true, message: "Service provider created successfully" });
+
+    return res.status(201).json({
+      success: true,
+      message: "Service provider created successfully",
+      provider: newProvider, // helpful for debugging response
+    });
 
   } catch (err) {
-    console.error("Register provider error:", err);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("🔥 Error in registerProvider:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message, // helpful for debugging
+    });
   }
 });
+
 
 
 const LogoutUser = asynchandler(async (req, res) => {
@@ -629,5 +672,5 @@ const updateInfo = asynchandler(async (req, res) => {
   );
 });
 
-export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider,getProfileInfo };
+export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo };
 

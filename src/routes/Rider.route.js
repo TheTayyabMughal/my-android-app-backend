@@ -11,11 +11,11 @@ import { verifyAdmin, verifyJWT, verifyProvider, verifyProviderOrAdmin } from ".
 
 const router = express.Router();
 
-router.post("/create",verifyJWT, verifyProvider,createRider); 
+router.post("/create",verifyJWT,createRider); 
 router.get("/getAll",getAllRiders); 
-router.put("/:id", updateRider); 
-router.delete("/:id",verifyJWT,verifyProviderOrAdmin,deleteRider);
-router.get("/getByProvider",verifyJWT,verifyProvider ,getRiderByProvider);
+router.put("/update/:id", updateRider); 
+router.delete("/delete/:id",verifyJWT,deleteRider);
+router.get("/getByProvider",verifyJWT,getRiderByProvider);
 router.get("/:id", getRiderById); 
 
 

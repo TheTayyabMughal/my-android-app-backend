@@ -28,18 +28,23 @@ const verifyJWT = asynchandler(async (req, res, next) => {
 
     // Find user and exclude sensitive info
     let user;
-    if (decoded.role === "provider") {
-      user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
+    if (decoded.role === "Admin") {
+      req.id = "Admin"
+      next();
     }
-    else{
-      user = await Users.findById(decoded._id).select("-password -refreshToken");
+    else {
+      if (decoded.role === "provider") {
+        user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
+      }
+      else {
+        user = await Users.findById(decoded._id).select("-password -refreshToken");
+      }
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized: Invalid token (user not found)" });
+      }
+      req.id = decoded._id;
+      next();
     }
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized: Invalid token (user not found)" });
-    }
-
-    req.id = decoded._id;
-    next();
   } catch (error) {
     console.error("🔥 JWT Middleware Error:", error);
     return res.status(500).json({ message: "Internal Server Error in JWT Middleware" });
