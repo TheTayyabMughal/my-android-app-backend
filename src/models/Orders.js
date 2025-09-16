@@ -25,6 +25,8 @@ const OrderSchema = new mongoose.Schema(
       default: "pending",
     },
     orderTrackingId: { type: String, required: true },
+    isFeedBackGiven: { type: Boolean, default: false },
+    measurementAdded: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

@@ -7,7 +7,8 @@ import {
   deleteServiceProvider,
   getServiceProviderHistoryById,
   getNearestServiceProviders,
-  getProviderProfile
+  getProviderProfile,
+  getProfileStatus
 } from "../Controllers/ServiceProviders.controller.js";
 import { verifyAdmin, verifyJWT } from "../middlewares/Authentication.middleware.js";
 
@@ -23,5 +24,6 @@ router.route("/gethistory/:id").get(getServiceProviderHistoryById);
 router.route("/getNearest").get(getNearestServiceProviders);
 router.route("/update/:id").put(updateServiceProvider);
 router.route("/delete/:id").delete( verifyJWT,verifyAdmin,deleteServiceProvider);
+router.route("/getProfileStatus").get(verifyJWT,getProfileStatus)
 
 export default router;

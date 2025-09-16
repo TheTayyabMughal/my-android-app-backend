@@ -256,8 +256,11 @@ const getUserOrders = asynchandler(async (req, res) => {
         totalPayment: 1,
         address: 1,
         status: 1,
+        isFeedBackGiven:1,
         createdAt: 1,
+        measurementAdded:1,
         "serviceProvider.username": 1,
+        "serviceProvider._id":1,
       },
     },
     { $sort: { createdAt: -1 } },
@@ -269,11 +272,16 @@ const getUserOrders = asynchandler(async (req, res) => {
 
 // Get orders for service provider
 const getProviderOrders = asynchandler(async (req, res) => {
-  const userId = req.id; // service provider id
+  const userId = req.id; // service provider id from token
 
   try {
     const orders = await Orders.aggregate([
-      { $match: { serviceProviderId: new mongoose.Types.ObjectId(userId) } },
+      {
+        $match: {
+          serviceProviderId: new mongoose.Types.ObjectId(userId),
+        },
+      },
+      // Join user data
       {
         $lookup: {
           from: "users",
@@ -282,7 +290,30 @@ const getProviderOrders = asynchandler(async (req, res) => {
           as: "user",
         },
       },
-      { $unwind: "$user" }, // user array ko single object me convert kare
+      { $unwind: "$user" },
+
+      // Join feedback only for orders with isFeedBackGiven = true
+      {
+        $lookup: {
+          from: "feedbacks",
+          let: { orderId: "$_id", feedbackFlag: "$isFeedBackGiven" },
+          pipeline: [
+            { $match: { $expr: { $and: [
+                { $eq: ["$order", "$$orderId"] },
+                { $eq: ["$$feedbackFlag", true] }
+            ]}}},
+            {
+              $project: {
+                rating: 1,
+                comment: 1,
+                givenBy: 1,
+                createdAt: 1,
+              },
+            },
+          ],
+          as: "feedback",
+        },
+      },
       {
         $project: {
           services: 1,
@@ -291,8 +322,10 @@ const getProviderOrders = asynchandler(async (req, res) => {
           status: 1,
           userId: 1,
           orderTrackingId: 1,
-          "user.measurements": 1,
+          isFeedBackGiven: 1,
           "user.username": 1,
+          "user.measurements": 1,
+          feedback: 1,
         },
       },
     ]);
@@ -302,7 +335,7 @@ const getProviderOrders = asynchandler(async (req, res) => {
       orders,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching provider orders:", error);
     res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
 });

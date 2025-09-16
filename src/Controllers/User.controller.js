@@ -439,25 +439,37 @@ const verifyOtp = asynchandler(async (req, res) => {
 
 const registerProvider = asynchandler(async (req, res) => {
   try {
-
     const { username, email, password, services, phoneNo, shopAddress, currentLocation } = req.body;
 
+    // Validate required fields
     if (!username || !email || !password || !phoneNo || !shopAddress || !currentLocation) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
+    // Validate services array
     if (!Array.isArray(services) || services.length === 0) {
       return res.status(400).json({ success: false, message: "At least one service is required" });
     }
 
+    // Check if username, email, or phoneNo already exists
     const existingProvider = await ServiceProviders.findOne({
-      $or: [{ username: username.toLowerCase() }, { email: email.toLowerCase() }]
+      $or: [
+        { username: username.toLowerCase() },
+        { email: email.toLowerCase() },
+        { phoneNo: phoneNo }
+      ]
     });
 
     if (existingProvider) {
-      return res.status(400).json({ success: false, message: "Service provider already exists" });
+      let message = "Service provider already exists";
+      if (existingProvider.email === email.toLowerCase()) message = "Email already exists";
+      else if (existingProvider.phoneNo === phoneNo) message = "Phone number already exists";
+      else if (existingProvider.username === username.toLowerCase()) message = "Username already exists";
+
+      return res.status(400).json({ success: false, message });
     }
 
+    // Hash password and create provider
     const hashedPassword = await bcrypt.hash(password, 10);
     const newProvider = await ServiceProviders.create({
       username: username.toLowerCase(),
@@ -469,11 +481,10 @@ const registerProvider = asynchandler(async (req, res) => {
       phoneNo,
     });
 
-
     return res.status(201).json({
       success: true,
       message: "Service provider created successfully",
-      provider: newProvider, // helpful for debugging response
+      provider: newProvider,
     });
 
   } catch (err) {
@@ -481,10 +492,11 @@ const registerProvider = asynchandler(async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: err.message, // helpful for debugging
+      error: err.message,
     });
   }
 });
+
 
 
 

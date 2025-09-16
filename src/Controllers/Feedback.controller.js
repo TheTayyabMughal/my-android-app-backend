@@ -8,61 +8,68 @@ import { Apiresponse } from "../utils/Apiresponse.js";
 import mongoose from "mongoose";
 
 export const createFeedback = asynchandler(async (req, res) => {
-  const { rating, comment, orderId, feedbackType = "overall" } = req.body;
-  const givenBy = req.user._id;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (!rating || !orderId) {
-    throw new Apierror(400, "Rating and Order ID are required");
+  try {
+    const { orderId, serviceProvider, rating, comment } = req.body;
+    const userId = req.id; // Logged-in user
+
+    if (!orderId || !serviceProvider || !rating) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    // Create feedback
+    const newFeedback = new Feedback({
+      rating,
+      comment,
+      givenBy: userId,
+      order: orderId,
+      serviceProvider,
+    });
+
+    await newFeedback.save({ session });
+
+    // Update Orders collection: mark feedback given
+    await Orders.findByIdAndUpdate(
+      orderId,
+      { isFeedBackGiven: true },
+      { session }
+    );
+
+    // Calculate average rating for this service provider using aggregation
+    const result = await Feedback.aggregate([
+      { $match: { serviceProvider: new mongoose.Types.ObjectId(serviceProvider) } },
+      { $group: { _id: "$serviceProvider", avgRating: { $avg: "$rating" } } },
+    ]).session(session);
+
+    let avgRating = result.length ? result[0].avgRating : 0;
+
+    // Round to nearest half for star display
+    avgRating = Math.round(avgRating * 2) / 2;
+
+    // Update service provider
+    await ServiceProviders.findByIdAndUpdate(
+      serviceProvider,
+      { rating: avgRating },
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({ success: true, message: "Review submitted successfully", avgRating });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error(err);
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: "You have already submitted a review for this order." });
+    }
+    return res.status(500).json({ success: false, message: "Server error" });
   }
-
-  // Check if order exists and belongs to user
-  const order = await Orders.findById(orderId).populate('orders.ServiceProviderId').populate('rider');
-  if (!order) {
-    throw new Apierror(404, "Order not found");
-  }
-
-  if (order.user.toString() !== givenBy.toString()) {
-    throw new Apierror(403, "You can only give feedback for your own orders");
-  }
-
-  if (order.status !== "Delivered") {
-    throw new Apierror(400, "You can only give feedback for delivered orders");
-  }
-
-  // Check if feedback already exists for this order
-  const existingFeedback = await Feedback.findOne({ givenBy, order: orderId });
-  if (existingFeedback) {
-    throw new Apierror(400, "Feedback already submitted for this order");
-  }
-
-  // Get service provider and rider from order
-  const serviceProvider = order.orders[0]?.ServiceProviderId;
-  const rider = order.rider;
-
-  const feedback = await Feedback.create({
-    rating,
-    comment,
-    givenBy,
-    order: orderId,
-    serviceProvider: serviceProvider?._id,
-    rider: rider?._id,
-    feedbackType,
-    isVerified: true
-  });
-
-  // Update order with feedback reference
-  order.feedback = feedback._id;
-  await order.save();
-
-  const populatedFeedback = await Feedback.findById(feedback._id)
-    .populate('givenBy', 'username email')
-    .populate('order', 'orderNumber')
-    .populate('serviceProvider', 'username')
-    .populate('rider', 'name');
-
-  res.status(201).json(
-    new Apiresponse(201, populatedFeedback, "Feedback submitted successfully")
-  );
 });
 
 export const getFeedbacksByOrder = asynchandler(async (req, res) => {
@@ -110,59 +117,75 @@ export const getFeedbacksByRider = asynchandler(async (req, res) => {
 });
 
 export const getFeedbacksByProvider = asynchandler(async (req, res) => {
-  const { providerId } = req.params;
-  const { page = 1, limit = 10 } = req.query;
+  try {
+    const { id } = req.params;
 
-  const feedbacks = await Feedback.find({ serviceProvider: providerId })
-    .populate("givenBy", "username email")
-    .populate("order", "orderNumber")
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(parseInt(limit));
+    // Validate if the provider exists
+    const provider = await ServiceProviders.findById(id);
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Service provider not found"
+      });
+    }
 
-  const total = await Feedback.countDocuments({ serviceProvider: providerId });
-  const avgRating = await Feedback.aggregate([
-    { $match: { serviceProvider: mongoose.Types.ObjectId(providerId) } },
-    { $group: { _id: null, avgRating: { $avg: "$rating" } } }
-  ]);
+    // Get all reviews for this provider with user details
+    const reviews = await Feedback.find({ serviceProvider: id })
+      .populate("givenBy", "username")
+      .sort({ createdAt: -1 });
 
-  res.status(200).json(
-    new Apiresponse(200, {
-      feedbacks,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
-        totalFeedbacks: total
-      },
-      averageRating: avgRating[0]?.avgRating || 0
-    }, "Feedbacks fetched successfully")
-  );
+    res.status(200).json({
+      success: true,
+      count: reviews.length,
+      reviews: reviews
+    });
+  } catch (error) {
+    console.error("Error fetching provider reviews:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching reviews"
+    });
+  }
 });
 
-export const getMyFeedbacks = asynchandler(async (req, res) => {
-  const userId = req.user._id;
-  const { page = 1, limit = 10 } = req.query;
+export const getProviderForFeedback = asynchandler(async (req, res) => {
+  try {
+    const providers = await ServiceProviders.find({
+      approvalFromAdmin: true,
+    }).select("-password -otp -otpExpiry -refreshToken");
 
-  const feedbacks = await Feedback.find({ givenBy: userId })
-    .populate("order", "orderNumber status")
-    .populate("serviceProvider", "username")
-    .populate("rider", "name")
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(parseInt(limit));
+    // Calculate average rating for each provider
+    const providersWithRatings = await Promise.all(
+      providers.map(async (provider) => {
+        const reviews = await Feedback.find({
+          serviceProvider: provider._id
+        });
 
-  const total = await Feedback.countDocuments({ givenBy: userId });
+        let averageRating = 0;
+        if (reviews.length > 0) {
+          const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+          averageRating = totalRating / reviews.length;
+        }
 
-  res.status(200).json(
-    new Apiresponse(200, {
-      feedbacks,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
-        totalFeedbacks: total
-      }
-    }, "My feedbacks fetched successfully")
-  );
+        return {
+          ...provider.toObject(),
+          rating: averageRating
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      count: providersWithRatings.length,
+      providers: providersWithRatings
+    });
+  } catch (error) {
+    console.error("Error fetching service providers:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching service providers"
+    });
+  }
 });
 
 export const updateFeedback = asynchandler(async (req, res) => {
@@ -226,7 +249,7 @@ export const deleteFeedback = asynchandler(async (req, res) => {
 
 export const getFeedbackAnalytics = asynchandler(async (req, res) => {
   const { providerId, riderId } = req.query;
-  
+
   const matchFilter = {};
   if (providerId) matchFilter.serviceProvider = mongoose.Types.ObjectId(providerId);
   if (riderId) matchFilter.rider = mongoose.Types.ObjectId(riderId);

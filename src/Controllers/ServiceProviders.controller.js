@@ -50,6 +50,37 @@ export const getProviderProfile = asynchandler(async (req, res) => {
 });
 
 
+export const getProfileStatus = asynchandler(async (req, res) => {
+  try {
+    const userId = req.id; // middleware should set req.id after verifying token
+
+    // Find provider by ID
+    const provider = await ServiceProviders.findById(userId).select("profileStatus");
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        isActive: provider.profileStatus
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching profile status:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message
+    });
+  }
+});
+
+
 // #################################################################################
 
 

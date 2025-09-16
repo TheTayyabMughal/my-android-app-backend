@@ -2,11 +2,12 @@ import { Services } from "../models/Services.model.js";
 import { asynchandler } from "../utils/Asynchandler.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 import { Apierror } from "../utils/Apierror.js";
+import { ServiceProviders } from "../models/ServiceProviders.model.js";
 
 export const createService = asynchandler(async (req, res) => {
   const { name } = req.body;
 
-  if (!name ) {
+  if (!name) {
     throw new Apierror(400, "All fields are required");
   }
 
@@ -47,4 +48,41 @@ export const deleteService = asynchandler(async (req, res) => {
   }
 
   res.status(200).json(new Apiresponse(200, null, "Service deleted successfully"));
+});
+
+
+export const getServicesForProvider = asynchandler(async (req, res) => {
+  try {
+    const userId = req.id; // assume middleware se set ho raha hai
+
+    // Single provider fetch
+    const provider = await ServiceProviders.findById(userId);
+
+    if (!provider) {
+      return res.status(404).json({ success: false, message: "Provider not found" });
+    }
+
+    // Get services with both _id and name
+    const serviceDocs = await Services.find({
+      _id: { $in: provider.servicesOffered }
+    }).select("name _id"); // Include both name and _id
+
+    // Return array of objects with _id and name
+    const services = serviceDocs.map((s) => ({
+      _id: s._id,
+      name: s.name
+    }));
+
+    return res.status(200).json({
+      success: true,
+      services: services
+    });
+  } catch (err) {
+    console.error("Error fetching provider services:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message
+    });
+  }
 });

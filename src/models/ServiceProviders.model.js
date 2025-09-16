@@ -38,17 +38,16 @@ const ServiceProviderSchema = new Schema(
       type: String,
       required: true,
     },
-    servicesOffered: {
-      type: [String],
-      required: true,
-    },
+    servicesOffered: [
+      { type: Schema.Types.ObjectId, ref: "Services", required: true }
+    ],
     profileStatus: {
       type: Boolean,
       default: true
     },
-    approvalFromAdmin:{
-      type:Boolean,
-      default:false
+    approvalFromAdmin: {
+      type: Boolean,
+      default: false
     },
     user: {
       type: Schema.Types.ObjectId,
@@ -58,6 +57,10 @@ const ServiceProviderSchema = new Schema(
       type: String,
       required: true,
     },
+    rating: {
+      type: Number,
+      default: 0
+    }
   },
   { timestamps: true }
 );

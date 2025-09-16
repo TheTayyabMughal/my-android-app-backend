@@ -21,23 +21,10 @@ const feedbackSchema = new mongoose.Schema(
       ref: "Orders",
       required: true,
     },
-    rider: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Riders",
-    },
     serviceProvider: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ServiceProviders",
     },
-    feedbackType: {
-      type: String,
-      enum: ["service", "delivery", "overall"],
-      default: "overall"
-    },
-    isVerified: {
-      type: Boolean,
-      default: false
-    }
   },
   { timestamps: true }
 );
