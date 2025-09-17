@@ -147,7 +147,7 @@ export const deleteMeasurement = asynchandler(async (req, res) => {
 });
 
 
-export const getMeasurementsWithProvider = async (req, res) => {
+export const getMeasurementsWithProvider = asynchandler(async (req, res) => {
   try {
     const userId = req.id; // Assuming this comes from authentication middleware
     
@@ -201,4 +201,4 @@ export const getMeasurementsWithProvider = async (req, res) => {
       message: 'Server error while fetching measurements' 
     });
   }
-};
+});

@@ -7,8 +7,7 @@ import { ServiceProviders } from "../models/ServiceProviders.model.js";
 
 const verifyJWT = asynchandler(async (req, res, next) => {
   try {
-
-    // Get token from cookie or Authorization header
+    // 🔹 Get token from cookie or Authorization header
     const cookieToken = req.cookies?.accessToken;
     const headerToken = req.header("Authorization")?.replace("Bearer ", "");
 
@@ -18,35 +17,35 @@ const verifyJWT = asynchandler(async (req, res, next) => {
       return res.status(401).json({ message: "❌ Unauthorized: No token provided" });
     }
 
-    // Verify JWT token
+    // 🔹 Verify JWT token
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     } catch (err) {
-      return res.status(401).json({ message: "Invalid or expired token" });
+      console.error("JWT Verification Error:", err.message);
+      return res.status(401).json({ message: "❌ Invalid or expired token" });
     }
 
-    // Find user and exclude sensitive info
+    // 🔹 Check user role and find user in DB
     let user;
     if (decoded.role === "Admin") {
-      req.id = "Admin"
+      req.id = "Admin";
       next();
+    } else if (decoded.role === "provider") {
+      user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
+      console.log("Found Provider:", user);
+    } else {
+      user = await Users.findById(decoded._id).select("-password -refreshToken");
+      console.log("Found User:", user);
     }
-    else {
-      if (decoded.role === "provider") {
-        user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
-      }
-      else {
-        user = await Users.findById(decoded._id).select("-password -refreshToken");
-      }
-      if (!user) {
-        return res.status(401).json({ message: "Unauthorized: Invalid token (user not found)" });
-      }
-      req.id = decoded._id;
-      next();
+
+    if (decoded.role !== "Admin" && !user) {
+      return res.status(401).json({ message: "❌ Unauthorized: Invalid token (user not found)" });
     }
+
+    req.id = decoded._id;
+    next();
   } catch (error) {
-    console.error("🔥 JWT Middleware Error:", error);
     return res.status(500).json({ message: "Internal Server Error in JWT Middleware" });
   }
 });
