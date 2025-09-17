@@ -50,4 +50,30 @@ app.get("/", (req, res) => {
   res.send("✅ Backend is running fine!");
 });
 
+// Error handling middleware (must be last)
+app.use((err, req, res, next) => {
+  console.error("Error middleware caught:", err);
+  
+  // If headers already sent, delegate to default Express error handler
+  if (res.headersSent) {
+    console.log("Headers already sent, delegating to default handler");
+    return next(err);
+  }
+  
+  // Send error response
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack })
+  });
+});
+
+// 404 handler
+app.use("*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`
+  });
+});
+
 export default app;

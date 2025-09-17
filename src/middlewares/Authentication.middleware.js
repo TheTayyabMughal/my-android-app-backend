@@ -6,48 +6,44 @@ import { ServiceProviders } from "../models/ServiceProviders.model.js";
 
 
 const verifyJWT = asynchandler(async (req, res, next) => {
-  try {
-    // 🔹 Get token from cookie or Authorization header
-    const cookieToken = req.cookies?.accessToken;
-    const headerToken = req.header("Authorization")?.replace("Bearer ", "");
+  // 🔹 Get token from cookie or Authorization header
+  const cookieToken = req.cookies?.accessToken;
+  const headerToken = req.header("Authorization")?.replace("Bearer ", "");
 
-    const token = cookieToken || headerToken;
+  const token = cookieToken || headerToken;
 
-    if (!token) {
-      return res.status(401).json({ message: "❌ Unauthorized: No token provided" });
-    }
-
-    // 🔹 Verify JWT token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    } catch (err) {
-      console.error("JWT Verification Error:", err.message);
-      return res.status(401).json({ message: "❌ Invalid or expired token" });
-    }
-
-    // 🔹 Check user role and find user in DB
-    let user;
-    if (decoded.role === "Admin") {
-      req.id = "Admin";
-      next();
-    } else if (decoded.role === "provider") {
-      user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
-      console.log("Found Provider:", user);
-    } else {
-      user = await Users.findById(decoded._id).select("-password -refreshToken");
-      console.log("Found User:", user);
-    }
-
-    if (decoded.role !== "Admin" && !user) {
-      return res.status(401).json({ message: "❌ Unauthorized: Invalid token (user not found)" });
-    }
-
-    req.id = decoded._id;
-    next();
-  } catch (error) {
-    return res.status(500).json({ message: "Internal Server Error in JWT Middleware" });
+  if (!token) {
+    throw new Apierror(401, "❌ Unauthorized: No token provided");
   }
+
+  // 🔹 Verify JWT token
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+  } catch (err) {
+    console.error("JWT Verification Error:", err.message);
+    throw new Apierror(401, "❌ Invalid or expired token");
+  }
+
+  // 🔹 Check user role and find user in DB
+  let user;
+  if (decoded.role === "Admin") {
+    req.id = "Admin";
+    return next();
+  } else if (decoded.role === "provider") {
+    user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
+    console.log("Found Provider:", user);
+  } else {
+    user = await Users.findById(decoded._id).select("-password -refreshToken");
+    console.log("Found User:", user);
+  }
+
+  if (decoded.role !== "Admin" && !user) {
+    throw new Apierror(401, "❌ Unauthorized: Invalid token (user not found)");
+  }
+
+  req.id = decoded._id;
+  next();
 });
 
 const verifyAdmin = asynchandler(async (req, res, next) => {

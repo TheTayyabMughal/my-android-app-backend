@@ -108,39 +108,40 @@ export const verifyApplicationOtp = asynchandler(async (req, res) => {
 // });
 
 export const getAllApplications = asynchandler(async (req, res) => {
-  try {
-    const applications = await ServiceProviders.aggregate([
-      {
-        $lookup: {
-          from: "services",             // Services collection name
-          localField: "servicesOffered", // This contains string values
-          foreignField: "name",         // Match with the name field in services collection
-          as: "servicesDetails"         // Store the matched services
-        }
-      },
-      {
-        $project: {
-          username: 1,
-          email: 1,
-          phoneNo: 1,
-          shopAddress: 1,
-          profileStatus: 1,
-          approvalFromAdmin: 1,
-          profilePic: 1,
-        }
+  console.log("getAllApplications called");
+  console.log("Headers sent before response:", res.headersSent);
+  
+  const applications = await ServiceProviders.aggregate([
+    {
+      $lookup: {
+        from: "services",             // Services collection name
+        localField: "servicesOffered", // This contains ObjectIds
+        foreignField: "_id",         // Match with the _id field in services collection
+        as: "servicesDetails"         // Store the matched services
       }
-    ]);
+    },
+    {
+      $project: {
+        username: 1,
+        email: 1,
+        phoneNo: 1,
+        shopAddress: 1,
+        profileStatus: 1,
+        approvalFromAdmin: 1,
+        profilePic: 1,
+        servicesDetails: 1
+      }
+    }
+  ]);
 
-
-    res.status(200).json(
-      new Apiresponse(200, applications, "Applications fetched successfully")
-    );
-  } catch (error) {
-    console.error(error);
-    res.status(500).json(
-      new Apiresponse(500, null, "Failed to fetch applications")
-    );
-  }
+  console.log("Applications fetched:", applications.length);
+  console.log("Headers sent before sending response:", res.headersSent);
+  
+  const response = new Apiresponse(200, applications, "Applications fetched successfully");
+  console.log("Response object created:", response);
+  
+  res.status(200).json(response);
+  console.log("Response sent successfully");
 });
 
 export const getAllPendingApplications = asynchandler(async (req, res) => {
@@ -167,25 +168,19 @@ export const getApplicationById = asynchandler(async (req, res) => {
 
 
 export const updateApplication = asynchandler(async (req, res) => {
-  try {
-    console.log("Helo")
-    const { id } = req.params;
-    const { approvalFromAdmin } = req.body;
+  const { id } = req.params;
+  const { approvalFromAdmin } = req.body;
 
-    // Check if application exists
-    const application = await ServiceProviders.findById(id);
-    if (!application) {
-      return res.status(404).json({ message: "Application not found" });
-    }
-
-    application.approvalFromAdmin = approvalFromAdmin;
-    await application.save();
-
-    res.status(200).json({ message: "Status updated successfully", application });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
+  // Check if application exists
+  const application = await ServiceProviders.findById(id);
+  if (!application) {
+    throw new Apierror(404, "Application not found");
   }
+
+  application.approvalFromAdmin = approvalFromAdmin;
+  await application.save();
+
+  res.status(200).json(new Apiresponse(200, application, "Status updated successfully"));
 });
 
 
