@@ -39,16 +39,16 @@ const UserSchema = new Schema(
     isVerified: { type: Boolean, default: false },
     measurements: [
       {
-        serviceProviderId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceProvider", required: true },
-        chest: { type: Number },
-        waist: { type: Number },
-        hips: { type: Number },
-        shoulder: { type: Number },
-        sleeveLength: { type: Number },
-        shirtLength: { type: Number },
-        trouserLength: { type: Number },
-        inseam: { type: Number },
-        neck: { type: Number },
+        serviceProviderId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceProviders", required: true },
+        chest: { type: Number, default: null },
+        waist: { type: Number, default: null },
+        hips: { type: Number, default: null },
+        shoulder: { type: Number, default: null },
+        sleeveLength: { type: Number, default: null },
+        shirtLength: { type: Number, default: null },
+        trouserLength: { type: Number, default: null },
+        inseam: { type: Number, default: null },
+        neck: { type: Number, default: null },
         notes: { type: String }
       }
     ],

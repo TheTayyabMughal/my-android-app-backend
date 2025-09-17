@@ -265,15 +265,13 @@ const getUserOrders = asynchandler(async (req, res) => {
     },
     { $sort: { createdAt: -1 } },
   ]);
-
   res.status(200).json(new Apiresponse(200, orders, "User orders fetched successfully"));
 
 });
 
 // Get orders for service provider
 const getProviderOrders = asynchandler(async (req, res) => {
-  const userId = req.id; // service provider id from token
-
+  const userId = req.id;
   try {
     const orders = await Orders.aggregate([
       {
@@ -281,7 +279,6 @@ const getProviderOrders = asynchandler(async (req, res) => {
           serviceProviderId: new mongoose.Types.ObjectId(userId),
         },
       },
-      // Join user data
       {
         $lookup: {
           from: "users",
@@ -291,6 +288,17 @@ const getProviderOrders = asynchandler(async (req, res) => {
         },
       },
       { $unwind: "$user" },
+      {
+        $addFields: {
+          "user.measurements": {
+            $filter: {
+              input: "$user.measurements",
+              as: "measurement",
+              cond: { $eq: ["$$measurement.serviceProviderId", new mongoose.Types.ObjectId(userId)] },
+            },
+          },
+        },
+      },
 
       // Join feedback only for orders with isFeedBackGiven = true
       {
@@ -298,10 +306,16 @@ const getProviderOrders = asynchandler(async (req, res) => {
           from: "feedbacks",
           let: { orderId: "$_id", feedbackFlag: "$isFeedBackGiven" },
           pipeline: [
-            { $match: { $expr: { $and: [
-                { $eq: ["$order", "$$orderId"] },
-                { $eq: ["$$feedbackFlag", true] }
-            ]}}},
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$order", "$$orderId"] },
+                    { $eq: ["$$feedbackFlag", true] },
+                  ],
+                },
+              },
+            },
             {
               $project: {
                 rating: 1,
@@ -314,6 +328,7 @@ const getProviderOrders = asynchandler(async (req, res) => {
           as: "feedback",
         },
       },
+
       {
         $project: {
           services: 1,
@@ -324,11 +339,13 @@ const getProviderOrders = asynchandler(async (req, res) => {
           orderTrackingId: 1,
           isFeedBackGiven: 1,
           "user.username": 1,
-          "user.measurements": 1,
+          "user.measurements": 1, // ✅ Only filtered measurements will be returned
           feedback: 1,
         },
       },
     ]);
+
+    console.log("Data: ", JSON.stringify(orders, null, 2));
 
     res.status(200).json({
       success: true,

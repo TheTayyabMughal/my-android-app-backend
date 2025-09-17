@@ -1,108 +1,102 @@
-import {Measurements} from "../models/Measurements.model.js"; 
+import { Measurements } from "../models/Measurements.model.js";
 import { asynchandler } from "../utils/Asynchandler.js";
 import { Apierror } from "../utils/Apierror.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 import mongoose from "mongoose";
 import { Users } from "../models/Users.model.js";
+import { ServiceProviders } from "../models/ServiceProviders.model.js";
+import { Orders } from "../models/Orders.js";
+
+
 
 export const createMeasurement = asynchandler(async (req, res) => {
-  const {
-    shirtLength,
-    shirt,
-    waistcoat,
-    sleeve,
-    shoulderWidth,
-    neck,
-    chest,
-    waist,
-    bottomWidth,
-    trouserLength,
-    hem,
-    front,
-    collar,
-    side,
-    cuff,
-    additionalDetails
-  } = req.body;
-
-  const user = req.user._id;
-
-  const newMeasurement = await Measurements.create({
-    shirtLength,
-    shirt,
-    waistcoat,
-    sleeve,
-    shoulderWidth,
-    neck,
-    chest,
-    waist,
-    bottomWidth,
-    trouserLength,
-    hem,
-    front,
-    collar,
-    side,
-    cuff,
-    additionalDetails,
-    user
-  });
-
-  res
-    .status(201)
-    .json(new Apiresponse(201, newMeasurement, "Measurement created successfully"));
-});
-
-export const getMyMeasurements = asynchandler(async (req, res) => {
-  const userId = new mongoose.Types.ObjectId(req.id);
+  const session = await mongoose.startSession();
 
   try {
-    const measurements = await Users.aggregate([
-      { $match: { _id: userId } },
-      { $unwind: "$measurements" }, // split measurements array
-      {
-        $lookup: {
-          from: "serviceproviders", // collection name in MongoDB
-          localField: "measurements.serviceProviderId",
-          foreignField: "_id",
-          as: "serviceProvider",
-        },
-      },
-      { $unwind: "$serviceProvider" }, // flatten serviceProvider array
-      {
-        $project: {
-          _id: 0,
-          chest: "$measurements.chest",
-          waist: "$measurements.waist",
-          hips: "$measurements.hips",
-          shoulder: "$measurements.shoulder",
-          sleeveLength: "$measurements.sleeveLength",
-          shirtLength: "$measurements.shirtLength",
-          trouserLength: "$measurements.trouserLength",
-          inseam: "$measurements.inseam",
-          neck: "$measurements.neck",
-          notes: "$measurements.notes",
-          serviceProvider: {
-            _id: 1,
-            username: 1,
-            phoneNo: 1,
-            shopAddress: 1,
-            servicesOffered: 1,
-          },
-        },
-      },
-    ]);
+    session.startTransaction();
 
-    return res.status(200).json({
+    const userId = req.id;
+    const { serviceProviderId, orderId, ...measurements } = req.body;
+
+    if (!userId) {
+      await session.abortTransaction();
+      return res.status(401).json({ success: false, message: "User not authenticated" });
+    }
+
+    if (!serviceProviderId || !orderId) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "serviceProviderId and orderId are required" });
+    }
+
+    // ✅ check provider
+    const providerExists = await ServiceProviders.findById(serviceProviderId).session(session);
+    if (!providerExists) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Service Provider not found" });
+    }
+
+    // ✅ format measurements
+    const formattedMeasurements = Object.fromEntries(
+      Object.entries(measurements).map(([key, value]) => [
+        key,
+        value === undefined || value === "" ? null : value,
+      ])
+    );
+
+    // ✅ find user inside transaction
+    const user = await Users.findById(userId).session(session);
+    if (!user) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const existingIndex = user.measurements.findIndex(
+      (m) => m.serviceProviderId.toString() === serviceProviderId
+    );
+
+    if (existingIndex === -1) {
+      user.measurements.push({ serviceProviderId, ...formattedMeasurements });
+    } else {
+      user.measurements[existingIndex] = {
+        ...user.measurements[existingIndex]._doc,
+        serviceProviderId,
+        ...formattedMeasurements,
+      };
+    }
+
+    await user.save({ session });
+
+    // ✅ update order inside same transaction
+    const updatedOrder = await Orders.findByIdAndUpdate(
+      orderId,
+      { measurementAdded: true },
+      { new: true, session }
+    );
+
+    if (!updatedOrder) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+  
+    await session.commitTransaction();
+
+    return res.status(201).json({
       success: true,
-      measurements,
+      message:
+        existingIndex === -1
+          ? "Measurement added successfully & order updated"
+          : "Measurement updated successfully & order updated",
     });
   } catch (error) {
-    console.error("Error fetching measurements:", error);
+    console.error("Error in addMeasurement:", error);
+    await session.abortTransaction();
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch measurements",
-      error: error.message,
+      message: "Something went wrong while saving measurements",
     });
+  } finally {
+    session.endSession();
   }
 });
 
@@ -151,3 +145,60 @@ export const deleteMeasurement = asynchandler(async (req, res) => {
     .status(200)
     .json(new Apiresponse(200, {}, "Measurement deleted successfully"));
 });
+
+
+export const getMeasurementsWithProvider = async (req, res) => {
+  try {
+    const userId = req.id; // Assuming this comes from authentication middleware
+    
+    // Find user with measurements and populate service provider details
+    const user = await Users.findById(userId)
+      .populate({
+        path: 'measurements.serviceProviderId',
+        select: 'username email phoneNo shopAddress' // Select the fields you need
+      });
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+    
+    // Format the response data to match frontend expectations
+    const measurementsWithProviders = user.measurements.map(measurement => ({
+      _id: measurement._id,
+      serviceProvider: {
+        _id: measurement.serviceProviderId._id,
+        username: measurement.serviceProviderId.username,
+        email: measurement.serviceProviderId.email,
+        phone: measurement.serviceProviderId.phoneNo || 'Not provided',
+        address: measurement.serviceProviderId.shopAddress || 'Not provided'
+      },
+      measurements: {
+        chest: measurement.chest,
+        waist: measurement.waist,
+        hips: measurement.hips,
+        shoulder: measurement.shoulder,
+        sleeveLength: measurement.sleeveLength,
+        shirtLength: measurement.shirtLength,
+        trouserLength: measurement.trouserLength,
+        inseam: measurement.inseam,
+        neck: measurement.neck,
+        notes: measurement.notes
+      },
+      createdAt: measurement.createdAt,
+      updatedAt: measurement.updatedAt
+    }));    
+    res.status(200).json({
+      success: true,
+      data: measurementsWithProviders
+    });
+  } catch (error) {
+    console.error('Error fetching measurements:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while fetching measurements' 
+    });
+  }
+};
