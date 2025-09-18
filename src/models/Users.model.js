@@ -40,15 +40,15 @@ const UserSchema = new Schema(
     measurements: [
       {
         serviceProviderId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceProviders", required: true },
-        chest: { type: Number, default: null },
-        waist: { type: Number, default: null },
-        hips: { type: Number, default: null },
-        shoulder: { type: Number, default: null },
-        sleeveLength: { type: Number, default: null },
-        shirtLength: { type: Number, default: null },
-        trouserLength: { type: Number, default: null },
-        inseam: { type: Number, default: null },
-        neck: { type: Number, default: null },
+        chest: { type: String, default: null },
+        waist: { type: String, default: null },
+        hips: { type: String, default: null },
+        shoulder: { type: String, default: null },
+        sleeveLength: { type: String, default: null },
+        shirtLength: { type: String, default: null },
+        trouserLength: { type: String, default: null },
+        inseam: { type: String, default: null },
+        neck: { type: String, default: null },
         notes: { type: String }
       }
     ],

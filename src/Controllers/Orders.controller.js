@@ -326,6 +326,36 @@ const getUserOrders = asynchandler(async (req, res) => {
     },
     // Unwind array from lookup
     { $unwind: "$serviceProvider" },
+    
+    // Join feedback only for orders with isFeedBackGiven = true
+    {
+      $lookup: {
+        from: "feedbacks",
+        let: { orderId: "$_id", feedbackFlag: "$isFeedBackGiven" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$order", "$$orderId"] },
+                  { $eq: ["$$feedbackFlag", true] },
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              rating: 1,
+              comment: 1,
+              givenBy: 1,
+              createdAt: 1,
+            },
+          },
+        ],
+        as: "review",
+      },
+    },
+    
     // Project only required fields
     {
       $project: {
@@ -340,6 +370,7 @@ const getUserOrders = asynchandler(async (req, res) => {
         measurementAdded:1,
         "serviceProvider.username": 1,
         "serviceProvider._id":1,
+        review: { $arrayElemAt: ["$review", 0] }, // Get first (and only) review
       },
     },
     { $sort: { createdAt: -1 } },

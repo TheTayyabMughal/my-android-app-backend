@@ -177,8 +177,33 @@ export const updateApplication = asynchandler(async (req, res) => {
     throw new Apierror(404, "Application not found");
   }
 
+  // Store the previous status to check if it changed
+  const previousStatus = application.approvalFromAdmin;
+  
   application.approvalFromAdmin = approvalFromAdmin;
   await application.save();
+
+  // Send email notification only if status actually changed
+  if (previousStatus !== approvalFromAdmin) {
+    const emailSubject = approvalFromAdmin ? "Application Approved ✅" : "Application Rejected ❌";
+    const emailMessage = approvalFromAdmin
+      ? `Dear ${application.username},\n\nCongratulations! Your application has been approved. You can now start providing services on our platform.\n\nBest regards,\nTailorWash Team`
+      : `Dear ${application.username},\n\nWe regret to inform you that your application has been rejected. Please contact support for further details.\n\nBest regards,\nTailorWash Team`;
+
+    try {
+      console.log(`📧 Attempting to send email to: ${application.email}`);
+      console.log(`📧 Email subject: ${emailSubject}`);
+      console.log(`📧 Application status: ${approvalFromAdmin ? 'Approved' : 'Rejected'}`);
+      
+      const emailResult = await sendEmail(application.email, emailSubject, emailMessage);
+      console.log(`✅ Email notification sent successfully to ${application.email} for ${approvalFromAdmin ? 'Approved' : 'Rejected'} status`);
+      console.log(`📧 Email result:`, emailResult);
+    } catch (emailError) {
+      console.error("❌ Failed to send email notification:", emailError.message);
+      console.error("❌ Email error details:", emailError);
+      // Don't throw error - application status should still be updated even if email fails
+    }
+  }
 
   res.status(200).json(new Apiresponse(200, application, "Status updated successfully"));
 });

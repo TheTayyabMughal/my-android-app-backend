@@ -8,6 +8,7 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { Users } from "../models/Users.model.js";
 import { ServiceProviders } from "../models/ServiceProviders.model.js";
+import { Admin } from "../models/Admin.model.js";
 import crypto from "crypto"
 import mongoose from "mongoose";
 
@@ -28,12 +29,14 @@ const transporter = nodemailer.createTransport({
 
 const generateAccessAndRefreshTokens = async (userId, role) => {
   try {
-    let user;
-    if (role === "provider") {
-      user = await ServiceProviders.findById(userId);
-    } else if (role === "customer") {
-      user = await Users.findById(userId); // default: customer
-    }
+  let user;
+  if (role === "provider") {
+    user = await ServiceProviders.findById(userId);
+  } else if (role === "Admin") {
+    user = await Admin.findById(userId);
+  } else {
+    user = await Users.findById(userId); // default: customer
+  }
 
 
     if (!user) {
@@ -662,38 +665,30 @@ const Loginuser = asynchandler(async (req, res) => {
     }
   }
   else if (role === "Admin") {
-    if (
-      email === process.env.ADMIN_EMAIL &&
-      password === process.env.ADMIN_PASSWORD
-    ) {
-      const accessToken = jwt.sign(
-        { role: "Admin" },
-        process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
-      );
-      const refreshToken = jwt.sign(
-        { role: "Admin" },
-        process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
-      );
-      return res
-        .status(200)
-        .json(
-          new Apiresponse(200, { accessToken, refreshToken, role }, "Logged in successfully")
-        );
-    } else {
+    // Find admin by email in database
+    user = await Admin.findOne({ email: email.toLowerCase() });
+    
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Check password
+    const isPasswordValid = await user.isPasswordCorrect(password);
+    if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
   }
 
   if (!user) throw new Apierror(400, "User not found, please sign up first");
 
-  // Compare password
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res
-      .status(401)
-      .json(new Apiresponse(401, null, "Invalid credentials"));
+  // Compare password (only for non-Admin users)
+  if (role !== "Admin") {
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res
+        .status(401)
+        .json(new Apiresponse(401, null, "Invalid credentials"));
+    }
   }
 
   // ✅ Generate 6-digit OTP
@@ -730,6 +725,8 @@ const verifyOtp = asynchandler(async (req, res) => {
   let user;
   if (role === "provider") {
     user = await ServiceProviders.findById(userId);
+  } else if (role === "Admin") {
+    user = await Admin.findById(userId);
   } else {
     user = await Users.findById(userId);
   }

@@ -8,10 +8,9 @@ const Riderschema = new Schema(
       required: true,
       unique: true,
     },
-    CNIC:{
+    address:{
         type: String,
       required: true,
-      unique: true,
     },
     phoneNo:{
         type: String,

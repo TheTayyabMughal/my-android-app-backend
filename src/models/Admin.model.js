@@ -37,6 +37,18 @@ const AdminSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    otp: {
+      type: String,
+      default: null,
+    },
+    otpExpiry: {
+      type: Date,
+      default: null,
+    },
+    refreshToken: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -67,6 +79,19 @@ AdminSchema.methods.generateAccessToken = function () {
 // Compare password
 AdminSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
+};
+
+// Generate refresh token
+AdminSchema.methods.generateRefreshToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+    },
+    process.env.REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+    }
+  );
 };
 
 export const Admin = mongoose.model("Admin", AdminSchema);

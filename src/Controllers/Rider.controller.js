@@ -5,7 +5,7 @@ import { Apierror } from "../utils/Apierror.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 
 export const createRider = asynchandler(async (req, res) => {
-  const { name, CNIC, phoneNo } = req.body;
+  const { name, address, phoneNo } = req.body;
   const id = req.id; 
   const provider = await ServiceProviders.findById(id); // Ensure provider exists
 
@@ -13,19 +13,19 @@ export const createRider = asynchandler(async (req, res) => {
     return res.status(404).json({ success: false, message: "Service provider not found" });
   }
 
-  if (!name || !CNIC || !phoneNo) {
+  if (!name || !address || !phoneNo) {
     return res.status(400).json({ success: false, message: "All fields are required" });
   }
 
   // Check if rider already exists
-  const existingRider = await Riders.findOne({ $or: [{ CNIC }, { name }] });
+  const existingRider = await Riders.findOne({ name });
   if (existingRider) {
-    return res.status(400).json({ success: false, message: "Rider with same CNIC or Name already exists" });
+    return res.status(400).json({ success: false, message: "Rider with same Name already exists" });
   }
 
   const newRider = await Riders.create({
     name,
-    CNIC,
+    address,
     phoneNo,
     serviceProvider: provider._id
   });
