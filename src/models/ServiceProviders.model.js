@@ -60,6 +60,16 @@ const ServiceProviderSchema = new Schema(
     rating: {
       type: Number,
       default: 0
+    },
+    paymentMethod: {
+      type: String,
+      enum: ["easypaisa", "jazzcash", "bank_transfer"],
+      default: "easypaisa"
+    },
+    paymentDetails: {
+      accountTitle: String,
+      accountNumber: String,
+      bankName: String
     }
   },
   { timestamps: true }
@@ -96,6 +106,9 @@ ServiceProviderSchema.methods.generateRefreshToken = function () {
     }
   );
 };
+
+// Add 2dsphere index for geospatial queries
+ServiceProviderSchema.index({ currentLocation: "2dsphere" });
 
 export const ServiceProviders = mongoose.model(
   "ServiceProviders",

@@ -14,13 +14,16 @@ import mongoose from "mongoose";
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
-  secure: true,
+  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  port: process.env.EMAIL_PORT || 587,
+  secure: false,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    user: process.env.EMAIL_USER || "adnanamin.online@gmail.com",
+    pass: process.env.EMAIL_PASS || "fpxq drqb sknd uyog"
   },
+  tls: {
+    rejectUnauthorized: false
+  }
 });
 
 const generateAccessAndRefreshTokens = async (userId, role) => {
@@ -127,7 +130,7 @@ const generateAccessAndRefreshTokens = async (userId, role) => {
 const testSendMail = async () => {
   try {
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_USER || "adnanamin.online@gmail.com",
       to: "abdullah03350904415@gmail.com",
       subject: "Test Email",
       html: "<p>This is a test email sent from your server.</p>",
@@ -159,18 +162,44 @@ const registerUser = asynchandler(async (req, res) => {
         .json({ success: false, message: "User already exists" });
     }
 
-    await Users.create({
+    let profilePicUrl = null;
+    
+    // Handle profile picture upload if provided
+    if (req.file) {
+      try {
+        const profilePicResponse = await uploadonCloudinary(req.file.path);
+        if (profilePicResponse?.url) {
+          profilePicUrl = profilePicResponse.url;
+        }
+      } catch (uploadError) {
+        console.error("Profile picture upload error:", uploadError);
+        return res
+          .status(400)
+          .json({ success: false, message: "Error uploading profile picture" });
+      }
+    }
+
+    const newUser = await Users.create({
       username: username.toLowerCase(),
       password,
       email,
       role,
+      profilePic: profilePicUrl,
       isVerified: true, // ✅ Direct verify since no OTP process
     });
 
+    // Return user data without password
+    const userResponse = await Users.findById(newUser._id).select("-password -refreshToken");
+
     return res
       .status(201)
-      .json({ success: true, message: "User created successfully" });
+      .json({ 
+        success: true, 
+        message: "User created successfully",
+        user: userResponse
+      });
   } catch (err) {
+    console.error("Registration error:", err);
     return res
       .status(500)
       .json({ success: false, message: "Internal server error" });
@@ -212,7 +241,7 @@ const getProfileInfo = async (req, res) => {
   try {
     const userId = req.id;
 
-    const user = await Users.findById(userId).select('username email');
+    const user = await Users.findById(userId).select('username email profilePic');
 
     if (!user) {
       return res.status(404).json({
@@ -226,7 +255,8 @@ const getProfileInfo = async (req, res) => {
       success: true,
       data: {
         username: user.username,
-        email: user.email
+        email: user.email,
+        profilePic: user.profilePic
       }
     });
 
@@ -238,6 +268,299 @@ const getProfileInfo = async (req, res) => {
     });
   }
 };
+
+const updateProfilePic = asynchandler(async (req, res) => {
+  try {
+    const userId = req.id;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Profile picture is required"
+      });
+    }
+
+    // Upload new profile picture to Cloudinary
+    const profilePicResponse = await uploadonCloudinary(req.file.path);
+    if (!profilePicResponse?.url) {
+      return res.status(400).json({
+        success: false,
+        message: "Error uploading profile picture"
+      });
+    }
+
+    // Update user's profile picture
+    const updatedUser = await Users.findByIdAndUpdate(
+      userId,
+      { profilePic: profilePicResponse.url },
+      { new: true }
+    ).select('username email profilePic');
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture updated successfully",
+      data: updatedUser
+    });
+
+  } catch (error) {
+    console.error("Error updating profile picture:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+const removeProfilePic = asynchandler(async (req, res) => {
+  try {
+    const userId = req.id;
+
+    // Update user to remove profile picture
+    const updatedUser = await Users.findByIdAndUpdate(
+      userId,
+      { profilePic: null },
+      { new: true }
+    ).select('username email profilePic');
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture removed successfully",
+      data: updatedUser
+    });
+
+  } catch (error) {
+    console.error("Error removing profile picture:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+// Provider Profile Picture Functions
+const getProviderProfileInfo = async (req, res) => {
+  try {
+    const providerId = req.id;
+
+    const provider = await ServiceProviders.findById(providerId).select('username email profilePic phoneNo shopAddress servicesOffered');
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found"
+      });
+    }
+
+    // Return the provider profile information
+    return res.status(200).json({
+      success: true,
+      data: {
+        username: provider.username,
+        email: provider.email,
+        profilePic: provider.profilePic,
+        phoneNo: provider.phoneNo,
+        shopAddress: provider.shopAddress,
+        servicesOffered: provider.servicesOffered
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching provider profile info:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+const updateProviderProfilePic = asynchandler(async (req, res) => {
+  try {
+    const providerId = req.id;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Profile picture is required"
+      });
+    }
+
+    // Upload new profile picture to Cloudinary
+    const profilePicResponse = await uploadonCloudinary(req.file.path);
+    if (!profilePicResponse?.url) {
+      return res.status(400).json({
+        success: false,
+        message: "Error uploading profile picture"
+      });
+    }
+
+    // Update provider's profile picture
+    const updatedProvider = await ServiceProviders.findByIdAndUpdate(
+      providerId,
+      { profilePic: profilePicResponse.url },
+      { new: true }
+    ).select('username email profilePic phoneNo shopAddress servicesOffered');
+
+    if (!updatedProvider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture updated successfully",
+      data: {
+        username: updatedProvider.username,
+        email: updatedProvider.email,
+        profilePic: updatedProvider.profilePic,
+        phoneNo: updatedProvider.phoneNo,
+        shopAddress: updatedProvider.shopAddress,
+        servicesOffered: updatedProvider.servicesOffered
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating provider profile picture:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+const removeProviderProfilePic = asynchandler(async (req, res) => {
+  try {
+    const providerId = req.id;
+
+    // Update provider to remove profile picture
+    const updatedProvider = await ServiceProviders.findByIdAndUpdate(
+      providerId,
+      { profilePic: null },
+      { new: true }
+    ).select('username email profilePic phoneNo shopAddress servicesOffered');
+
+    if (!updatedProvider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture removed successfully",
+      data: {
+        username: updatedProvider.username,
+        email: updatedProvider.email,
+        profilePic: updatedProvider.profilePic,
+        phoneNo: updatedProvider.phoneNo,
+        shopAddress: updatedProvider.shopAddress,
+        servicesOffered: updatedProvider.servicesOffered
+      }
+    });
+
+  } catch (error) {
+    console.error("Error removing provider profile picture:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+const updateProviderProfile = asynchandler(async (req, res) => {
+  try {
+    const providerId = req.id;
+    const { username, phoneNo, shopAddress } = req.body;
+
+    // Validate required fields
+    if (!username || !phoneNo || !shopAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Username, phone number, and shop address are required"
+      });
+    }
+
+    // Check if username is already taken by another provider
+    const existingProvider = await ServiceProviders.findOne({
+      username: username.toLowerCase(),
+      _id: { $ne: providerId }
+    });
+
+    if (existingProvider) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already taken"
+      });
+    }
+
+    // Check if phone number is already taken by another provider
+    const existingPhone = await ServiceProviders.findOne({
+      phoneNo: phoneNo,
+      _id: { $ne: providerId }
+    });
+
+    if (existingPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number already taken"
+      });
+    }
+
+    // Update provider profile
+    const updatedProvider = await ServiceProviders.findByIdAndUpdate(
+      providerId,
+      {
+        username: username.toLowerCase(),
+        phoneNo,
+        shopAddress
+      },
+      { new: true }
+    ).select('username email profilePic phoneNo shopAddress servicesOffered');
+
+    if (!updatedProvider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: {
+        username: updatedProvider.username,
+        email: updatedProvider.email,
+        profilePic: updatedProvider.profilePic,
+        phoneNo: updatedProvider.phoneNo,
+        shopAddress: updatedProvider.shopAddress,
+        servicesOffered: updatedProvider.servicesOffered
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating provider profile:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
 
 
 
@@ -261,13 +584,16 @@ const sendOtp = async (user) => {
 const sendEmail = async (to, subject, message, actionText = null, actionUrl = null) => {
   try {
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: true,
+      host: process.env.EMAIL_HOST || "smtp.gmail.com",
+      port: process.env.EMAIL_PORT || 587,
+      secure: false,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: process.env.EMAIL_USER || "adnanamin.online@gmail.com",
+        pass: process.env.EMAIL_PASS || "fpxq drqb sknd uyog"
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
     // 2️⃣ Professional HTML Template
@@ -439,15 +765,38 @@ const verifyOtp = asynchandler(async (req, res) => {
 
 const registerProvider = asynchandler(async (req, res) => {
   try {
+    console.log("Provider registration request body:", req.body);
+    console.log("Provider registration request file:", req.file);
+    
     const { username, email, password, services, phoneNo, shopAddress, currentLocation } = req.body;
 
+    // Parse JSON fields from FormData
+    let parsedServices = services;
+    let parsedCurrentLocation = currentLocation;
+
+    if (typeof services === 'string') {
+      try {
+        parsedServices = JSON.parse(services);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: "Invalid services format" });
+      }
+    }
+
+    if (typeof currentLocation === 'string') {
+      try {
+        parsedCurrentLocation = JSON.parse(currentLocation);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: "Invalid location format" });
+      }
+    }
+
     // Validate required fields
-    if (!username || !email || !password || !phoneNo || !shopAddress || !currentLocation) {
+    if (!username || !email || !password || !phoneNo || !shopAddress || !parsedCurrentLocation) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
     // Validate services array
-    if (!Array.isArray(services) || services.length === 0) {
+    if (!Array.isArray(parsedServices) || parsedServices.length === 0) {
       return res.status(400).json({ success: false, message: "At least one service is required" });
     }
 
@@ -469,22 +818,43 @@ const registerProvider = asynchandler(async (req, res) => {
       return res.status(400).json({ success: false, message });
     }
 
+    let profilePicUrl = null;
+    
+    // Handle profile picture upload if provided
+    if (req.file) {
+      try {
+        const profilePicResponse = await uploadonCloudinary(req.file.path);
+        if (profilePicResponse?.url) {
+          profilePicUrl = profilePicResponse.url;
+        }
+      } catch (uploadError) {
+        console.error("Profile picture upload error:", uploadError);
+        return res
+          .status(400)
+          .json({ success: false, message: "Error uploading profile picture" });
+      }
+    }
+
     // Hash password and create provider
     const hashedPassword = await bcrypt.hash(password, 10);
     const newProvider = await ServiceProviders.create({
       username: username.toLowerCase(),
       password: hashedPassword,
       email: email.toLowerCase(),
-      servicesOffered: services,
+      servicesOffered: parsedServices,
       shopAddress,
-      currentLocation,
+      currentLocation: parsedCurrentLocation,
       phoneNo,
+      profilePic: profilePicUrl,
     });
+
+    // Return provider data without password
+    const providerResponse = await ServiceProviders.findById(newProvider._id).select("-password");
 
     return res.status(201).json({
       success: true,
       message: "Service provider created successfully",
-      provider: newProvider,
+      provider: providerResponse,
     });
 
   } catch (err) {
@@ -501,7 +871,7 @@ const registerProvider = asynchandler(async (req, res) => {
 
 
 const LogoutUser = asynchandler(async (req, res) => {
-  const user = await Users.findByIdAndUpdate(req.user?._id, { $unset: { refreshToken: 1 } }, { new: true });
+  const user = await Users.findByIdAndUpdate(req.id, { $unset: { refreshToken: 1 } }, { new: true });
   if (!user) {
     throw new Apierror(400, "User not found");
   }
@@ -509,7 +879,11 @@ const LogoutUser = asynchandler(async (req, res) => {
 });
 
 const getCurrentUser = asynchandler(async (req, res) => {
-  res.status(200).json(req.user);
+  const user = await Users.findById(req.id).select("-password -refreshToken");
+  if (!user) {
+    throw new Apierror(404, "User not found");
+  }
+  res.status(200).json(user);
 });
 
 
@@ -577,7 +951,7 @@ const updatePassword = asynchandler(async (req, res) => {
     throw new Apierror(400, "Both old and new passwords are required");
   }
 
-  const user = await Users.findById(req.user._id);
+  const user = await Users.findById(req.id);
   if (!user) {
     throw new Apierror(400, "User not found");
   }
@@ -654,15 +1028,15 @@ const updatePasswordStep2 = asynchandler(async (req, res) => {
 
 
 const updateInfo = asynchandler(async (req, res) => {
-  const { name, username } = req.body;
+  const { username } = req.body;
 
-  if (!name || !username) {
-    throw new Apierror(400, "Both name and username are required");
+  if (!username) {
+    throw new Apierror(400, "Username is required");
   }
 
   const existingUser = await Users.findOne({
-    username,
-    _id: { $ne: req.user._id }
+    username: username.toLowerCase(),
+    _id: { $ne: req.id }
   });
 
   if (existingUser) {
@@ -670,8 +1044,8 @@ const updateInfo = asynchandler(async (req, res) => {
   }
 
   const updatedUser = await Users.findByIdAndUpdate(
-    req.user._id,
-    { name, username },
+    req.id,
+    { username: username.toLowerCase() },
     { new: true, runValidators: true }
   ).select("-password -refreshToken");
 
@@ -684,5 +1058,5 @@ const updateInfo = asynchandler(async (req, res) => {
   );
 });
 
-export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo };
+export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo, updateProfilePic, removeProfilePic, getProviderProfileInfo, updateProviderProfilePic, removeProviderProfilePic, updateProviderProfile };
 

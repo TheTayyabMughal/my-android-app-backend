@@ -14,6 +14,7 @@ import feedbackRoute from "./routes/Feedback.routes.js";
 import measurementRoute from "./routes/Measurement.routes.js";
 import ordersRoute from "./routes/Orders.routes.js";
 import paymentRoute from "./routes/Payment.routes.js";
+import adminRoute from "./routes/Admin.routes.js";
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use("/api/v1/feedback", feedbackRoute);
 app.use("/api/v1/measurements", measurementRoute);
 app.use("/api/v1/orders", ordersRoute);
 app.use("/api/v1/payments", paymentRoute);
+app.use("/api/v1/admin", adminRoute);
 
 // Health check
 app.get("/", (req, res) => {

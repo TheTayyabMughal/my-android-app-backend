@@ -1,24 +1,26 @@
-import { Router } from 'express';
-import { 
-    createPaymentIntent, 
-    confirmPayment, 
-    refundPayment, 
-    handleWebhook 
-} from '../Controllers/Payment.controller.js';
-import { verifyJWT } from '../middlewares/Authentication.middleware.js';
+import { Router } from "express";
+import { verifyJWT } from "../middlewares/Authentication.middleware.js";
+import {
+  getProviderPaymentMethod,
+  updateProviderPaymentMethod,
+  getProviderPaymentHistory,
+  getAllProvidersPaymentSummary,
+  makePaymentToProvider,
+  getAdminPaymentHistory,
+  getProviderAdminPaymentHistory
+} from "../Controllers/Payment.controller.js";
 
 const router = Router();
 
-// Payment intent creation (protected route)
-router.route('/create-intent').post(verifyJWT, createPaymentIntent);
+// Provider Payment Routes
+router.route("/provider/method").get(verifyJWT, getProviderPaymentMethod);
+router.route("/provider/method").put(verifyJWT, updateProviderPaymentMethod);
+router.route("/provider/history").get(verifyJWT, getProviderPaymentHistory);
+router.route("/provider/admin-history").get(verifyJWT, getProviderAdminPaymentHistory);
 
-// Confirm payment status (protected route)
-router.route('/confirm').post(verifyJWT, confirmPayment);
-
-// Process refund (protected route - admin/provider only)
-router.route('/refund').post(verifyJWT, refundPayment);
-
-// Webhook endpoint (public - Stripe will call this)
-router.route('/webhook').post(handleWebhook);
+// Admin Payment Routes
+router.route("/admin/summary").get(verifyJWT, getAllProvidersPaymentSummary);
+router.route("/admin/make-payment").post(verifyJWT, makePaymentToProvider);
+router.route("/admin/history").get(verifyJWT, getAdminPaymentHistory);
 
 export default router;

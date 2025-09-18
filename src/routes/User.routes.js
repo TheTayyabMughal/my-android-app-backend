@@ -14,20 +14,26 @@ import {
   resetPassword,
   verifyRegistrationOtp,
   getProfileInfo,
-  registerProvider
+  registerProvider,
+  updateProfilePic,
+  removeProfilePic,
+  getProviderProfileInfo,
+  updateProviderProfilePic,
+  removeProviderProfilePic,
+  updateProviderProfile
 } from "../Controllers/User.controller.js";
-import { upload } from "../middlewares/Multer.middleware.js";
+import { uploadProfilePic } from "../middlewares/Multer.middleware.js";
 import { verifyJWT } from "../middlewares/Authentication.middleware.js";
 const router = Router();
 
 router
   .route("/register")
-  .post(registerUser);
+  .post(uploadProfilePic, registerUser);
 
 router.route("/verify-registration-otp").post(verifyRegistrationOtp);
 router.route("/profile").get(verifyJWT,getProfileInfo)
 router.route("/login").post(Loginuser);
-router.route("/register/provider").post(registerProvider);
+router.route("/register/provider").post(uploadProfilePic, registerProvider);
 router.route("/verify-otp").post(verifyOtp);
 router.route("/logout").post(verifyJWT, LogoutUser);
 router.route("/getcurrent").get(verifyJWT, getCurrentUser);
@@ -39,5 +45,15 @@ router.route("/updatestep2").put(verifyJWT, updatePasswordStep2);
 
 router.route("/forgotPassword").post(forgotPassword);
 router.route("/resetPassword").put(resetPassword);
+
+// Profile picture routes
+router.route("/profile-pic").put(verifyJWT, uploadProfilePic, updateProfilePic);
+router.route("/profile-pic").delete(verifyJWT, removeProfilePic);
+
+// Provider profile picture routes
+router.route("/provider/profile").get(verifyJWT, getProviderProfileInfo);
+router.route("/provider/profile").put(verifyJWT, updateProviderProfile);
+router.route("/provider/profile-pic").put(verifyJWT, uploadProfilePic, updateProviderProfilePic);
+router.route("/provider/profile-pic").delete(verifyJWT, removeProviderProfilePic);
 
 export default router;

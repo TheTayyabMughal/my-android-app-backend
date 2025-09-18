@@ -99,66 +99,91 @@ export const createOffer = asynchandler(async (req, res) => {
 
 export const getNearbyOffers = asynchandler(async (req, res) => {
   try {
-    const { lat, lng } = req.query;
+    const { lat, lng, search } = req.query;
     if (!lat || !lng) {
       return res.status(400).json({ message: "Provide lat and lng" });
     }
 
-    // ✅ Find nearby providers
-    const nearbyProviders = await ServiceProviders.find({
+    console.log(`🔍 Searching for providers near: ${lat}, ${lng}`);
+    if (search) {
+      console.log(`🔎 Search term: ${search}`);
+    }
+
+    // ✅ Find ALL nearby providers within 10km (not just those with offers)
+    let query = {
       profileStatus: true,
+      approvalFromAdmin: true,
       currentLocation: {
         $geoWithin: {
           $centerSphere: [[parseFloat(lng), parseFloat(lat)], 10 / 6371], // 10km radius
         },
       },
-    });
+    };
 
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      query.$or = [
+        { username: searchRegex },
+        { shopAddress: searchRegex },
+        { 'servicesOffered.name': searchRegex }
+      ];
+      console.log(`🔎 Search query:`, JSON.stringify(query, null, 2));
+    }
+
+    const nearbyProviders = await ServiceProviders.find(query)
+      .populate('servicesOffered', 'name description')
+      .select('username phoneNo shopAddress servicesOffered currentLocation profilePic');
+
+    console.log(`📍 Found ${nearbyProviders.length} nearby providers`);
+    if (search && search.trim()) {
+      console.log(`🔍 Providers matching "${search}":`, nearbyProviders.map(p => ({
+        username: p.username,
+        shopAddress: p.shopAddress,
+        services: p.servicesOffered?.map(s => s.name) || []
+      })));
+    }
+
+    // ✅ Get offers for these providers (optional - providers can exist without offers)
     const providerIds = nearbyProviders.map((p) => p._id);
-
-    // ✅ Find offers and populate provider details
     const offers = await Offers.find({
       serviceProvider: { $in: providerIds },
       isActive: true,
-    }).populate(
-      "serviceProvider",
-      "username phoneNo shopAddress servicesOffered currentLocation"
-    );
+    }).populate("serviceProvider", "username phoneNo shopAddress servicesOffered currentLocation profilePic");
 
-    // ✅ Group offers by serviceProvider
-    const groupedOffers = offers.reduce((acc, offer) => {
-      const provider = offer.serviceProvider;
-      const providerId = provider._id.toString();
+    console.log(`🎁 Found ${offers.length} active offers`);
 
-      // Find existing provider group
-      let group = acc.find((g) => g.provider._id.toString() === providerId);
+    // ✅ Create provider groups (with or without offers)
+    const groupedOffers = nearbyProviders.map(provider => {
+      // Find offers for this provider
+      const providerOffers = offers.filter(offer => 
+        offer.serviceProvider._id.toString() === provider._id.toString()
+      );
 
-      if (!group) {
-        group = {
-          provider: {
-            _id: provider._id,
-            username: provider.username,
-            phoneNo: provider.phoneNo,
-            shopAddress: provider.shopAddress,
-            servicesOffered: provider.servicesOffered,
-            location: provider.currentLocation.coordinates,
-          },
-          offers: [],
-        };
-        acc.push(group);
-      }
+      return {
+        provider: {
+          _id: provider._id,
+          username: provider.username,
+          phoneNo: provider.phoneNo,
+          shopAddress: provider.shopAddress,
+          servicesOffered: provider.servicesOffered,
+          profilePic: provider.profilePic,
+          location: provider.currentLocation.coordinates,
+        },
+        offers: providerOffers.map(offer => ({
+          _id: offer._id,
+          title: offer.title,
+          description: offer.description,
+          discountPercentage: offer.discountPercentage,
+          servicesIncluded: offer.servicesIncluded,
+        }))
+      };
+    });
 
-      // Push offer details
-      group.offers.push({
-        _id: offer._id,
-        title: offer.title,
-        description: offer.description,
-        discountPercentage: offer.discountPercentage,
-        servicesIncluded: offer.servicesIncluded,
-      });
-
-      return acc;
-    }, []);
+    console.log(`📦 Final grouped offers: ${groupedOffers.length} providers`);
+    groupedOffers.forEach((group, index) => {
+      console.log(`  ${index + 1}. ${group.provider.username} - ${group.offers.length} offers`);
+    });
 
     return res.json({ groupedOffers });
   } catch (err) {

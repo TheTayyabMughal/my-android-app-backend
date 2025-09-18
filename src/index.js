@@ -3,6 +3,7 @@ import connectDB from "../src/db/db.js";
 import app from "./app.js";
 import mongoose from "mongoose";
 import { Services } from "./models/Services.model.js"; // path adjust karo
+import { initializeServices, initializeAdmin } from "./utils/InitDb.js";
 import nodemailer from "nodemailer";
 
 dotenv.config({ path: "./env" });
@@ -68,9 +69,9 @@ connectDB()
         app.listen(process.env.PORT || 5000, "0.0.0.0", async () => {
             console.log(`Server running on port: ${process.env.PORT || 5000}`);
 
-            // Add default services after server starts
-            //   await addService("Tailor");
-            //   await addService("Laundry");
+            // Initialize default data
+            await initializeServices();
+            await initializeAdmin();
 
           //sendEmail("adnanamin.available@gmail.com", "Dummy Email Test", "Hello! This is a test email from Nodemailer 🚀");
     });

@@ -3,6 +3,7 @@ import { asynchandler } from "../utils/Asynchandler.js";
 import jwt from "jsonwebtoken";
 import { Users } from "../models/Users.model.js";
 import { ServiceProviders } from "../models/ServiceProviders.model.js";
+import { Admin } from "../models/Admin.model.js";
 
 
 const verifyJWT = asynchandler(async (req, res, next) => {
@@ -27,8 +28,15 @@ const verifyJWT = asynchandler(async (req, res, next) => {
 
   // 🔹 Check user role and find user in DB
   let user;
-  if (decoded.role === "Admin") {
-    req.id = "Admin";
+  if (decoded.role === "admin" || decoded.role === "super_admin") {
+    // For admin users, find in Admin collection
+    user = await Admin.findById(decoded._id).select("-password");
+    console.log("Found Admin:", user);
+    if (!user) {
+      throw new Apierror(401, "❌ Unauthorized: Invalid token (admin not found)");
+    }
+    req.id = decoded._id;
+    req.user = user;
     return next();
   } else if (decoded.role === "provider") {
     user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
@@ -38,11 +46,12 @@ const verifyJWT = asynchandler(async (req, res, next) => {
     console.log("Found User:", user);
   }
 
-  if (decoded.role !== "Admin" && !user) {
+  if (!user) {
     throw new Apierror(401, "❌ Unauthorized: Invalid token (user not found)");
   }
 
   req.id = decoded._id;
+  req.user = user;
   next();
 });
 

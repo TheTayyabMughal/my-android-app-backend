@@ -244,7 +244,19 @@ export const updateApplicationStatus = asynchandler(async (req, res) => {
       ? `Dear ${application.username},\n\nCongratulations! Your application has been approved. Your account has been created, and you can now log in.\n\nBest regards,\nYour Company`
       : `Dear ${application.username},\n\nWe regret to inform you that your application has been rejected. Please contact support for further details.\n\nBest regards,\nYour Company`;
 
-  await sendEmail(application.email, emailSubject, emailMessage);
+  try {
+    console.log(`📧 Attempting to send email to: ${application.email}`);
+    console.log(`📧 Email subject: ${emailSubject}`);
+    console.log(`📧 Application status: ${status}`);
+    
+    const emailResult = await sendEmail(application.email, emailSubject, emailMessage);
+    console.log(`✅ Email notification sent successfully to ${application.email} for ${status} status`);
+    console.log(`📧 Email result:`, emailResult);
+  } catch (emailError) {
+    console.error("❌ Failed to send email notification:", emailError.message);
+    console.error("❌ Email error details:", emailError);
+    // Don't throw error - application status should still be updated even if email fails
+  }
 
   res.status(200).json(
     new Apiresponse(200, application, `Application ${status.toLowerCase()} successfully`)

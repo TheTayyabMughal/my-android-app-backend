@@ -6,6 +6,7 @@ import { ServiceProviders } from "../models/ServiceProviders.model.js";
 import { Riders } from "../models/Rider.model.js";
 import { Users } from "../models/Users.model.js";
 import { Measurements } from "../models/Measurements.model.js";
+import { createPaymentRecord } from "./Payment.controller.js";
 import Stripe from 'stripe';
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
@@ -36,17 +37,20 @@ const createPaymentIntent = asynchandler(async (req, res) => {
 const sendEmailwithHTML = async (to, subject, html) => {
   try {
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: true, // for port 465
+      host: process.env.EMAIL_HOST || "smtp.gmail.com",
+      port: process.env.EMAIL_PORT || 587,
+      secure: false,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: process.env.EMAIL_USER || "adnanamin.online@gmail.com",
+        pass: process.env.EMAIL_PASS || "fpxq drqb sknd uyog"
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
     const mailOptions = {
-      from: `"Tailorwash" <${process.env.EMAIL_USER}>`,
+      from: `"Tailorwash" <${process.env.EMAIL_USER || "adnanamin.online@gmail.com"}>`,
       to,
       subject,
       html, // Using HTML for professional email
@@ -87,7 +91,21 @@ const createOrder = asynchandler(async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // ✅ Send confirmation email after saving
+    // ✅ Create payment record for provider
+    try {
+      await createPaymentRecord({
+        orderId: savedOrder._id,
+        providerId: savedOrder.serviceProviderId,
+        userId: savedOrder.userId,
+        amount: savedOrder.totalPayment
+      });
+      console.log("✅ Payment record created for order:", savedOrder.orderTrackingId);
+    } catch (paymentErr) {
+      console.error("⚠️ Failed to create payment record:", paymentErr.message);
+      // Don't throw error here - order should still be created even if payment record fails
+    }
+
+    // ✅ Send confirmation email to user after saving
     try {
       await sendEmailwithHTML(
         savedOrder.address.email,
@@ -115,6 +133,67 @@ const createOrder = asynchandler(async (req, res) => {
       );
     } catch (emailErr) {
       console.error("⚠️ Failed to send order confirmation email:", emailErr.message);
+    }
+
+    // ✅ Send notification email to service provider
+    try {
+      // Get service provider details
+      const serviceProvider = await ServiceProviders.findById(savedOrder.serviceProviderId).select('email username');
+      
+      if (serviceProvider && serviceProvider.email) {
+        await sendEmailwithHTML(
+          serviceProvider.email,
+          `New Order Received - Tracking ID: ${savedOrder.orderTrackingId}`,
+          `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #2196F3;">New Order Received 📦</h2>
+            <p>Hello <strong>${serviceProvider.username}</strong>,</p>
+            <p>You have received a new order! Here are the details:</p>
+            
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <h3 style="color: #333; margin-top: 0;">Order Details</h3>
+              <p><strong>Tracking ID:</strong> ${savedOrder.orderTrackingId}</p>
+              <p><strong>Total Payment:</strong> $${savedOrder.totalPayment}</p>
+              <p><strong>Status:</strong> Pending</p>
+            </div>
+
+            <h3>Customer Information:</h3>
+            <div style="background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <p><strong>Name:</strong> ${savedOrder.address.fullName}</p>
+              <p><strong>Email:</strong> ${savedOrder.address.email}</p>
+              <p><strong>Phone:</strong> ${savedOrder.address.phoneNo}</p>
+              <p><strong>Address:</strong> ${savedOrder.address.homeAddress}</p>
+            </div>
+
+            <h3>Ordered Services:</h3>
+            <div style="background-color: #fff3e0; padding: 15px; border-radius: 5px; margin: 15px 0;">
+              <ul style="margin: 0; padding-left: 20px;">
+                ${savedOrder.services
+                  .map(
+                    (service) =>
+                      `<li><strong>${service.name}</strong> - Quantity: ${service.quantity} - Price: $${service.price}</li>`
+                  )
+                  .join("")}
+              </ul>
+            </div>
+
+            <p style="margin-top: 20px;"><strong>Next Steps:</strong></p>
+            <ul>
+              <li>Review the order details</li>
+              <li>Contact the customer if needed</li>
+              <li>Update order status in your dashboard</li>
+              <li>Add measurements if required</li>
+            </ul>
+
+            <p style="margin-top: 20px;">Please log in to your provider dashboard to manage this order.</p>
+            <p style="margin-top: 20px;">Thanks,<br/>Team Tailorwash</p>
+          </div>
+          `
+        );
+        console.log("✅ Provider notification email sent successfully");
+      }
+    } catch (providerEmailErr) {
+      console.error("⚠️ Failed to send provider notification email:", providerEmailErr.message);
     }
 
     return res.status(201).json({
@@ -360,17 +439,20 @@ const getProviderOrders = asynchandler(async (req, res) => {
 const sendEmail = async (to, subject, text) => {
   try {
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: true, // SSL for port 465
+      host: process.env.EMAIL_HOST || "smtp.gmail.com",
+      port: process.env.EMAIL_PORT || 587,
+      secure: false,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: process.env.EMAIL_USER || "adnanamin.online@gmail.com",
+        pass: process.env.EMAIL_PASS || "fpxq drqb sknd uyog"
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
     const mailOptions = {
-      from: `"Tailorwash" <${process.env.EMAIL_USER}>`,
+      from: `"Tailorwash" <${process.env.SMTP_EMAIL}>`,
       to,
       subject,
       text,
@@ -420,7 +502,7 @@ const updateOrderStatus = asynchandler(async (req, res) => {
       });
     }
 
-    // Send email notification
+    // Send email notification to user
     try {
       await sendEmail(
         updatedOrder.address.email,
@@ -428,8 +510,23 @@ const updateOrderStatus = asynchandler(async (req, res) => {
         `Hello,\n\nYour order with Tracking ID ${updatedOrder.orderTrackingId} is now "${status}".\n\nThank you for using Tailorwash!`
       );
     } catch (emailErr) {
-      console.error("⚠️ Failed to send order status email:", emailErr.message);
-      // Continue even if email fails (don’t block response)
+      console.error("⚠️ Failed to send order status email to user:", emailErr.message);
+    }
+
+    // Send email notification to service provider
+    try {
+      const serviceProvider = await ServiceProviders.findById(updatedOrder.serviceProviderId).select('email username');
+      
+      if (serviceProvider && serviceProvider.email) {
+        await sendEmail(
+          serviceProvider.email,
+          `Order Status Updated: ${updatedOrder.orderTrackingId}`,
+          `Hello ${serviceProvider.username},\n\nYou have updated the status of order ${updatedOrder.orderTrackingId} to "${status}".\n\nCustomer: ${updatedOrder.address.fullName}\nEmail: ${updatedOrder.address.email}\nPhone: ${updatedOrder.address.phoneNo}\n\nKeep up the great work!\n\nTeam Tailorwash`
+        );
+        console.log("✅ Provider status update notification sent");
+      }
+    } catch (providerEmailErr) {
+      console.error("⚠️ Failed to send status update email to provider:", providerEmailErr.message);
     }
 
     res.status(200).json({
@@ -493,6 +590,21 @@ const addMeasurements = asynchandler(async (req, res) => {
   }
 
   await user.save();
+
+  // Send email notification to user about measurements
+  try {
+    const serviceProvider = await ServiceProviders.findById(serviceProviderId).select('username');
+    const action = existingIndex >= 0 ? "updated" : "added";
+    
+    await sendEmail(
+      order.address.email,
+      `Measurements ${action} for Order: ${orderTrackingId}`,
+      `Hello ${order.address.fullName},\n\nYour measurements have been ${action} for order ${orderTrackingId} by ${serviceProvider?.username || 'your service provider'}.\n\nOrder Details:\n- Tracking ID: ${orderTrackingId}\n- Service Provider: ${serviceProvider?.username || 'N/A'}\n- Status: Measurements ${action}\n\nYou can view your measurements in your account dashboard.\n\nThank you for using Tailorwash!\n\nTeam Tailorwash`
+    );
+    console.log("✅ User measurement notification sent");
+  } catch (emailErr) {
+    console.error("⚠️ Failed to send measurement notification to user:", emailErr.message);
+  }
 
   res.status(200).json(
     new Apiresponse(200, user.measurements, "Measurements added/updated successfully")
