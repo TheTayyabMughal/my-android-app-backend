@@ -27,7 +27,7 @@ export const initializeAdmin = async () => {
       // Create default admin with credentials from .env or defaults
       const defaultAdmin = {
         username: process.env.ADMIN_USERNAME || "Tayyab",
-        email: process.env.ADMIN_EMAIL || "thetmughal@gmail.com",
+        email: process.env.ADMIN_EMAIL || "tailorwash@gmail.com",
         password: process.env.ADMIN_PASSWORD || "admin123",
         role: "super_admin"
       };
