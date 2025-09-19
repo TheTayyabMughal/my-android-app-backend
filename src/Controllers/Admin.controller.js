@@ -2,7 +2,7 @@ import { asynchandler } from "../utils/Asynchandler.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 import { Apierror } from "../utils/Apierror.js";
 import { Admin } from "../models/Admin.model.js";
-import { uploadonCloudinary } from "../utils/Fileupload.js";
+import { smartUpload } from "../utils/Fileupload.js";
 import fs from "fs";
 
 // Register Admin (for initial setup)
@@ -208,14 +208,17 @@ export const updateAdminProfilePic = asynchandler(async (req, res) => {
       throw new Apierror(404, "Admin not found");
     }
 
-    // Note: Cloudinary handles its own cleanup, no need to delete local files
-    // The old profile picture URL will be replaced in the database
+    // Delete old profile picture if exists
+    if (admin.profilePic) {
+      try {
+        await fs.promises.unlink(admin.profilePic);
+      } catch (error) {
+        console.error("Error deleting old profile picture:", error);
+      }
+    }
 
     // Upload new profile picture
-    const profilePicPath = req.file.path;
-    console.log("🔍 Uploading profile picture from path:", profilePicPath);
-    
-    const profilePic = await uploadonCloudinary(profilePicPath);
+    const profilePic = await smartUpload(req.file);
 
     if (!profilePic) {
       console.error("❌ Failed to upload to Cloudinary");

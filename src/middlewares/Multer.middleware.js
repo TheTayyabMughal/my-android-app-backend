@@ -1,13 +1,32 @@
 import multer from "multer";
+import fs from "fs";
 
-const storage = multer.diskStorage({
-    destination: function(req, file, cb) {
-        cb(null, './public/temp')
-    },
-    filename: function(req, file, cb) {
-        cb(null, file.originalname)
-    },
-})
+// Smart storage configuration - works for both local and Vercel
+const createStorage = () => {
+  // Check if we're on Vercel (serverless environment)
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    // Use memory storage for Vercel
+    return multer.memoryStorage();
+  } else {
+    // Use disk storage for local development
+    // Ensure temp directory exists
+    const tempDir = './public/temp';
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    return multer.diskStorage({
+      destination: function(req, file, cb) {
+        cb(null, tempDir);
+      },
+      filename: function(req, file, cb) {
+        cb(null, file.originalname);
+      },
+    });
+  }
+};
+
+const storage = createStorage();
 
 // File filter for profile pictures
 const fileFilter = (req, file, cb) => {

@@ -1,4 +1,4 @@
-import { uploadonCloudinary } from "../utils/Fileupload.js";
+import { smartUpload } from "../utils/Fileupload.js";
 import { asynchandler } from "../utils/Asynchandler.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 import { Apierror } from "../utils/Apierror.js";
@@ -170,7 +170,7 @@ const registerUser = asynchandler(async (req, res) => {
     // Handle profile picture upload if provided
     if (req.file) {
       try {
-        const profilePicResponse = await uploadonCloudinary(req.file.path);
+        const profilePicResponse = await smartUpload(req.file);
         if (profilePicResponse?.url) {
           profilePicUrl = profilePicResponse.url;
         }
@@ -284,7 +284,7 @@ const updateProfilePic = asynchandler(async (req, res) => {
     }
 
     // Upload new profile picture to Cloudinary
-    const profilePicResponse = await uploadonCloudinary(req.file.path);
+    const profilePicResponse = await smartUpload(req.file);
     if (!profilePicResponse?.url) {
       return res.status(400).json({
         success: false,
@@ -402,7 +402,7 @@ const updateProviderProfilePic = asynchandler(async (req, res) => {
     }
 
     // Upload new profile picture to Cloudinary
-    const profilePicResponse = await uploadonCloudinary(req.file.path);
+    const profilePicResponse = await smartUpload(req.file);
     if (!profilePicResponse?.url) {
       return res.status(400).json({
         success: false,
@@ -820,7 +820,7 @@ const registerProvider = asynchandler(async (req, res) => {
     // Handle profile picture upload if provided
     if (req.file) {
       try {
-        const profilePicResponse = await uploadonCloudinary(req.file.path);
+        const profilePicResponse = await smartUpload(req.file);
         if (profilePicResponse?.url) {
           profilePicUrl = profilePicResponse.url;
         }

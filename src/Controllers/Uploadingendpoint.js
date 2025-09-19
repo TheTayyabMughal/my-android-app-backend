@@ -1,5 +1,5 @@
 
-import { uploadonCloudinary } from "../utils/Fileupload.js";
+import { smartUpload } from "../utils/Fileupload.js";
 
 export const uploadMedia = async (req, res) => {
   try {
@@ -15,8 +15,10 @@ export const uploadMedia = async (req, res) => {
     const imageUrls = [];
 
     for (const file of filesArray) {
-      const uploadedImage = await uploadonCloudinary(file.path);
-      imageUrls.push(uploadedImage.url);
+      const uploadedImage = await smartUpload(file);
+      if (uploadedImage?.url) {
+        imageUrls.push(uploadedImage.url);
+      }
     }
 
     res.status(200).json({ data: imageUrls });
