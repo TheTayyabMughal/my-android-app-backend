@@ -208,14 +208,8 @@ export const updateAdminProfilePic = asynchandler(async (req, res) => {
       throw new Apierror(404, "Admin not found");
     }
 
-    // Delete old profile picture if exists
-    if (admin.profilePic) {
-      try {
-        await fs.promises.unlink(admin.profilePic);
-      } catch (error) {
-        console.error("Error deleting old profile picture:", error);
-      }
-    }
+    // Note: Cloudinary handles its own cleanup, no need to delete local files
+    // The old profile picture URL will be replaced in the database
 
     // Upload new profile picture
     const profilePicPath = req.file.path;
