@@ -12,6 +12,7 @@ const uploadonCloudinary = async (localFilePath) => {
         if (!localFilePath) return null;
         const response = await cloudinary.uploader.upload(localFilePath, {
           resource_type: "auto",
+          secure_url: true,
         });
         fs.unlinkSync(localFilePath);
         return response;
@@ -31,6 +32,7 @@ const uploadonCloudinaryFromBuffer = async (fileBuffer, originalName) => {
         
         const response = await cloudinary.uploader.upload(base64String, {
           resource_type: "auto",
+          secure_url: true,
           public_id: `profile_${Date.now()}_${originalName}`,
         });
         
