@@ -31,7 +31,7 @@ export const getProviderPaymentMethod = asynchandler(async (req, res) => {
       }, "Payment method retrieved successfully")
         );
     } catch (error) {
-    console.error("Error getting provider payment method:", error);
+("Error getting provider payment method:", error);
     throw new Apierror(500, "Failed to retrieve payment method");
   }
 });
@@ -42,9 +42,9 @@ export const updateProviderPaymentMethod = asynchandler(async (req, res) => {
     const providerId = req.id;
     const { paymentMethod, paymentDetails } = req.body;
 
-    console.log("🔍 Updating payment method for provider:", providerId);
-    console.log("🔍 Received paymentMethod:", paymentMethod);
-    console.log("🔍 Received paymentDetails:", paymentDetails);
+("🔍 Updating payment method for provider:", providerId);
+("🔍 Received paymentMethod:", paymentMethod);
+("🔍 Received paymentDetails:", paymentDetails);
 
     if (!paymentMethod) {
       throw new Apierror(400, "Payment method is required");
@@ -68,8 +68,8 @@ export const updateProviderPaymentMethod = asynchandler(async (req, res) => {
       throw new Apierror(404, "Provider not found");
     }
 
-    console.log("✅ Updated provider payment method:", provider.paymentMethod);
-    console.log("✅ Updated provider payment details:", provider.paymentDetails);
+("✅ Updated provider payment method:", provider.paymentMethod);
+("✅ Updated provider payment details:", provider.paymentDetails);
 
         res.status(200).json(
             new Apiresponse(200, {
@@ -80,7 +80,7 @@ export const updateProviderPaymentMethod = asynchandler(async (req, res) => {
       }, "Payment method updated successfully")
         );
     } catch (error) {
-    console.error("Error updating provider payment method:", error);
+("Error updating provider payment method:", error);
     throw new Apierror(500, "Failed to update payment method");
   }
 });
@@ -126,7 +126,7 @@ export const getProviderPaymentHistory = asynchandler(async (req, res) => {
       }, "Payment history retrieved successfully")
     );
   } catch (error) {
-    console.error("Error getting provider payment history:", error);
+("Error getting provider payment history:", error);
     throw new Apierror(500, "Failed to retrieve payment history");
   }
 });
@@ -175,7 +175,7 @@ export const getAllProvidersPaymentSummary = asynchandler(async (req, res) => {
       new Apiresponse(200, providersWithPayments, "Providers payment summary retrieved successfully")
         );
     } catch (error) {
-    console.error("Error getting providers payment summary:", error);
+("Error getting providers payment summary:", error);
     throw new Apierror(500, "Failed to retrieve providers payment summary");
   }
 });
@@ -183,11 +183,11 @@ export const getAllProvidersPaymentSummary = asynchandler(async (req, res) => {
 // Make payment to provider (Admin function)
 export const makePaymentToProvider = asynchandler(async (req, res) => {
   try {
-    console.log("🔍 Starting payment process...");
+("🔍 Starting payment process...");
     const adminId = req.id;
     const { providerId, amount, paymentMethod, paymentDetails, notes } = req.body;
 
-    console.log("🔍 Payment request data:", { adminId, providerId, amount, paymentMethod, paymentDetails, notes });
+("🔍 Payment request data:", { adminId, providerId, amount, paymentMethod, paymentDetails, notes });
 
     if (!providerId || !amount || !paymentMethod) {
       throw new Apierror(400, "Provider ID, amount, and payment method are required");
@@ -202,10 +202,28 @@ export const makePaymentToProvider = asynchandler(async (req, res) => {
       throw new Apierror(404, "Provider not found");
     }
 
-    console.log("🔍 Provider found:", provider.username);
+    // Check if provider has payment method configured
+    if (!provider.paymentMethod || !provider.paymentDetails) {
+      throw new Apierror(400, "Provider has not configured their payment method. Please ask the provider to add their payment details first.");
+    }
+
+    // Validate payment details based on payment method
+    const { paymentMethod: providerPaymentMethod, paymentDetails: providerPaymentDetails } = provider;
+    if (providerPaymentMethod === "easypaisa" || providerPaymentMethod === "jazzcash") {
+      if (!providerPaymentDetails.accountNumber || !providerPaymentDetails.accountTitle) {
+        throw new Apierror(400, "Provider's mobile payment details are incomplete. Please ask the provider to complete their payment setup.");
+      }
+    } else if (providerPaymentMethod === "bank_transfer") {
+      if (!providerPaymentDetails.accountNumber || !providerPaymentDetails.accountTitle || !providerPaymentDetails.bankName) {
+        throw new Apierror(400, "Provider's bank transfer details are incomplete. Please ask the provider to complete their payment setup.");
+      }
+    }
+
+("🔍 Provider found:", provider.username);
+("🔍 Provider payment method:", provider.paymentMethod);
 
     // Create admin payment record
-    console.log("🔍 Creating admin payment record...");
+("🔍 Creating admin payment record...");
     const adminPayment = await AdminPayments.create({
       providerId,
       amount,
@@ -216,17 +234,17 @@ export const makePaymentToProvider = asynchandler(async (req, res) => {
       status: "completed",
       paidAt: new Date()
     });
-    console.log("✅ Admin payment record created:", adminPayment._id);
+("✅ Admin payment record created:", adminPayment._id);
 
     // Update pending payments up to the amount being paid
-    console.log("🔍 Finding pending payments for provider:", providerId);
+("🔍 Finding pending payments for provider:", providerId);
     const pendingPayments = await Payments.find({ 
       providerId, 
       status: "pending" 
     }).sort({ createdAt: 1 }); // Oldest first
 
-    console.log("🔍 Found pending payments:", pendingPayments.length);
-    console.log("🔍 Pending payments details:", pendingPayments.map(p => ({ id: p._id, amount: p.amount, status: p.status })));
+("🔍 Found pending payments:", pendingPayments.length);
+("🔍 Pending payments details:", pendingPayments.map(p => ({ id: p._id, amount: p.amount, status: p.status })));
 
     let remainingAmount = amount;
     const updatedPaymentIds = [];
@@ -234,13 +252,13 @@ export const makePaymentToProvider = asynchandler(async (req, res) => {
     for (const payment of pendingPayments) {
       if (remainingAmount <= 0) break;
       
-      console.log("🔍 Processing payment:", payment._id, "Amount:", payment.amount, "Remaining:", remainingAmount);
+("🔍 Processing payment:", payment._id, "Amount:", payment.amount, "Remaining:", remainingAmount);
       
       const paymentAmount = Math.min(payment.amount, remainingAmount);
       
       // If this payment is partially paid, we need to create a new payment record
       if (paymentAmount < payment.amount) {
-        console.log("🔍 Creating partial payment record for remaining amount:", payment.amount - paymentAmount);
+("🔍 Creating partial payment record for remaining amount:", payment.amount - paymentAmount);
         // Create a new payment record for the remaining amount
         await Payments.create({
           orderId: payment.orderId,
@@ -255,7 +273,7 @@ export const makePaymentToProvider = asynchandler(async (req, res) => {
       }
       
       // Update the current payment
-      console.log("🔍 Updating payment:", payment._id, "to amount:", paymentAmount);
+("🔍 Updating payment:", payment._id, "to amount:", paymentAmount);
       await Payments.findByIdAndUpdate(payment._id, {
         amount: paymentAmount,
         status: "paid",
@@ -267,7 +285,7 @@ export const makePaymentToProvider = asynchandler(async (req, res) => {
       remainingAmount -= paymentAmount;
     }
 
-    console.log("✅ Payment processing completed. Updated payments:", updatedPaymentIds.length);
+("✅ Payment processing completed. Updated payments:", updatedPaymentIds.length);
 
     // Send email notification to provider
     try {
@@ -277,20 +295,20 @@ export const makePaymentToProvider = asynchandler(async (req, res) => {
         `Payment Received - Amount: PKR ${amount}`,
         `Hello ${provider.username},\n\nYou have received a payment of PKR ${amount}.\n\nPayment Method: ${paymentMethod}\nAmount: PKR ${amount}\nDate: ${new Date().toLocaleDateString()}\n\nThank you for your service!\n\nTeam Tailorwash`
       );
-      console.log("✅ Payment notification email sent to provider");
+("✅ Payment notification email sent to provider");
     } catch (emailErr) {
-      console.error("⚠️ Failed to send payment notification email:", emailErr.message);
+("⚠️ Failed to send payment notification email:", emailErr.message);
     }
 
     res.status(201).json(
       new Apiresponse(201, adminPayment, "Payment made successfully")
     );
   } catch (error) {
-    console.error("❌ Error making payment to provider:", error);
-    console.error("❌ Error message:", error.message);
-    console.error("❌ Error stack:", error.stack);
+("❌ Error making payment to provider:", error);
+("❌ Error message:", error.message);
+("❌ Error stack:", error.stack);
     if (error.name === 'ValidationError') {
-      console.error("❌ Validation errors:", error.errors);
+("❌ Validation errors:", error.errors);
     }
     throw new Apierror(500, `Failed to make payment: ${error.message}`);
   }
@@ -330,7 +348,7 @@ export const getAdminPaymentHistory = asynchandler(async (req, res) => {
       }, "Admin payment history retrieved successfully")
     );
   } catch (error) {
-    console.error("Error getting admin payment history:", error);
+("Error getting admin payment history:", error);
     throw new Apierror(500, "Failed to retrieve admin payment history");
   }
 });
@@ -369,7 +387,7 @@ export const getProviderAdminPaymentHistory = asynchandler(async (req, res) => {
       }, "Provider admin payment history retrieved successfully")
     );
   } catch (error) {
-    console.error("Error getting provider admin payment history:", error);
+("Error getting provider admin payment history:", error);
     throw new Apierror(500, "Failed to retrieve admin payment history");
   }
 });
@@ -379,7 +397,7 @@ export const createPaymentRecord = async (orderData) => {
   try {
     const { orderId, providerId, userId, amount } = orderData;
 
-    console.log("🔍 Creating payment record with data:", {
+("🔍 Creating payment record with data:", {
       providerId,
       orderId,
       userId,
@@ -399,12 +417,12 @@ export const createPaymentRecord = async (orderData) => {
       paymentMethod: "stripe" // Default for order payments
     });
 
-    console.log("✅ Payment record created:", payment._id);
+("✅ Payment record created:", payment._id);
     return payment;
   } catch (error) {
-    console.error("❌ Error creating payment record:", error);
-    console.error("❌ Error details:", error.message);
-    console.error("❌ Error stack:", error.stack);
+("❌ Error creating payment record:", error);
+("❌ Error details:", error.message);
+("❌ Error stack:", error.stack);
     throw error;
   }
 };

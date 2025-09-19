@@ -104,9 +104,9 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
       return res.status(400).json({ message: "Provide lat and lng" });
     }
 
-    console.log(`🔍 Searching for providers near: ${lat}, ${lng}`);
+(`🔍 Searching for providers near: ${lat}, ${lng}`);
     if (search) {
-      console.log(`🔎 Search term: ${search}`);
+(`🔎 Search term: ${search}`);
     }
 
     // ✅ Find ALL nearby providers within 10km (not just those with offers)
@@ -128,16 +128,16 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
         { shopAddress: searchRegex },
         { 'servicesOffered.name': searchRegex }
       ];
-      console.log(`🔎 Search query:`, JSON.stringify(query, null, 2));
+(`🔎 Search query:`, JSON.stringify(query, null, 2));
     }
 
     const nearbyProviders = await ServiceProviders.find(query)
       .populate('servicesOffered', 'name description')
       .select('username phoneNo shopAddress servicesOffered currentLocation profilePic');
 
-    console.log(`📍 Found ${nearbyProviders.length} nearby providers`);
+(`📍 Found ${nearbyProviders.length} nearby providers`);
     if (search && search.trim()) {
-      console.log(`🔍 Providers matching "${search}":`, nearbyProviders.map(p => ({
+(`🔍 Providers matching "${search}":`, nearbyProviders.map(p => ({
         username: p.username,
         shopAddress: p.shopAddress,
         services: p.servicesOffered?.map(s => s.name) || []
@@ -151,7 +151,7 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
       isActive: true,
     }).populate("serviceProvider", "username phoneNo shopAddress servicesOffered currentLocation profilePic");
 
-    console.log(`🎁 Found ${offers.length} active offers`);
+(`🎁 Found ${offers.length} active offers`);
 
     // ✅ Create provider groups (with or without offers)
     const groupedOffers = nearbyProviders.map(provider => {
@@ -180,14 +180,14 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
       };
     });
 
-    console.log(`📦 Final grouped offers: ${groupedOffers.length} providers`);
+(`📦 Final grouped offers: ${groupedOffers.length} providers`);
     groupedOffers.forEach((group, index) => {
-      console.log(`  ${index + 1}. ${group.provider.username} - ${group.offers.length} offers`);
+(`  ${index + 1}. ${group.provider.username} - ${group.offers.length} offers`);
     });
 
     return res.json({ groupedOffers });
   } catch (err) {
-    console.error("❌ getNearbyOffers Error:", err);
+("❌ getNearbyOffers Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -207,7 +207,7 @@ export const getProviderProfileStatus = asynchandler(async (req, res) => {
 
     res.status(200).json({ status: user.profileStatus });
   } catch (err) {
-    console.error("Error in getProviderProfileStatus:", err);
+("Error in getProviderProfileStatus:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -229,7 +229,7 @@ export const toggleProfileStatus = asynchandler(async (req, res) => {
       status: user.profileStatus,
     });
   } catch (err) {
-    console.error("Error in toggleProfileStatus:", err);
+("Error in toggleProfileStatus:", err);
     return res.status(500).json({ message: "Server error" });
   }
 });

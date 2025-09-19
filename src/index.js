@@ -14,17 +14,14 @@ export const addService = async (serviceName) => {
         // Check if service already exists
         const existing = await Services.findOne({ name: serviceName });
         if (existing) {
-            console.log(`${serviceName} already exists`);
             return existing;
         }
 
         // Create new service
         const newService = new Services({ name: serviceName });
         const savedService = await newService.save();
-        console.log(`${serviceName} added successfully`);
         return savedService;
     } catch (error) {
-        console.error("Error adding service:", error);
         throw error;
     }
 };
@@ -53,10 +50,8 @@ export const sendEmail = async (to, subject, text) => {
 
         // 3. Send email
         const info = await transporter.sendMail(mailOptions);
-        console.log("✅ Email sent:", info.messageId);
         return info;
     } catch (error) {
-        console.error("❌ Email send failed:", error);
         throw error;
     }
 };
@@ -64,18 +59,22 @@ export const sendEmail = async (to, subject, text) => {
 
 
 // Connect to MongoDB and start server
+// Connect to MongoDB and start server
 connectDB()
-    .then(async () => {
-        app.listen(process.env.PORT || 5000, "0.0.0.0", async () => {
-            console.log(`Server running on port: ${process.env.PORT || 5000}`);
-
-            // Initialize default data
-            await initializeServices();
-            await initializeAdmin();
-
-          //sendEmail("adnanamin.available@gmail.com", "Dummy Email Test", "Hello! This is a test email from Nodemailer 🚀");
+  .then(async () => {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, "0.0.0.0", async () => {
+      console.log(`✅ Server running on port: ${PORT}`);
+      
+      try {
+        await initializeServices();
+        await initializeAdmin();
+        console.log("✅ Default services and admin initialized");
+      } catch (error) {
+        console.error("❌ Initialization error:", error);
+      }
     });
   })
-  .catch ((err) => {
-    console.log("MongoDB connection failed !!!", err);
-});
+  .catch((err) => {
+    console.error("❌ MongoDB connection failed:", err);
+  });

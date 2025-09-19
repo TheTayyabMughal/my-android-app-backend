@@ -38,7 +38,6 @@ export const registerAdmin = asynchandler(async (req, res) => {
       new Apiresponse(201, createdAdmin, "Admin registered successfully")
     );
   } catch (error) {
-    console.error("Error registering admin:", error);
     throw new Apierror(500, "Failed to register admin");
   }
 });
@@ -87,7 +86,6 @@ export const loginAdmin = asynchandler(async (req, res) => {
       )
     );
   } catch (error) {
-    console.error("Error logging in admin:", error);
     throw new Apierror(500, "Failed to login admin");
   }
 });
@@ -107,7 +105,6 @@ export const getAdminProfile = asynchandler(async (req, res) => {
       new Apiresponse(200, admin, "Admin profile retrieved successfully")
     );
   } catch (error) {
-    console.error("Error getting admin profile:", error);
     throw new Apierror(500, "Failed to get admin profile");
   }
 });
@@ -148,7 +145,6 @@ export const updateAdminProfile = asynchandler(async (req, res) => {
       new Apiresponse(200, admin, "Admin profile updated successfully")
     );
   } catch (error) {
-    console.error("Error updating admin profile:", error);
     throw new Apierror(500, "Failed to update admin profile");
   }
 });
@@ -188,7 +184,6 @@ export const updateAdminPassword = asynchandler(async (req, res) => {
       new Apiresponse(200, {}, "Password updated successfully")
     );
   } catch (error) {
-    console.error("Error updating admin password:", error);
     throw new Apierror(500, "Failed to update password");
   }
 });
@@ -213,7 +208,6 @@ export const updateAdminProfilePic = asynchandler(async (req, res) => {
       try {
         await fs.promises.unlink(admin.profilePic);
       } catch (error) {
-        console.error("Error deleting old profile picture:", error);
       }
     }
 
@@ -221,11 +215,8 @@ export const updateAdminProfilePic = asynchandler(async (req, res) => {
     const profilePic = await smartUpload(req.file);
 
     if (!profilePic) {
-      console.error("❌ Failed to upload to Cloudinary");
       throw new Apierror(500, "Failed to upload profile picture to cloud");
     }
-
-    console.log("✅ Profile picture uploaded successfully:", profilePic.url);
 
     // Update admin profile picture
     const updatedAdmin = await Admin.findByIdAndUpdate(
@@ -238,13 +229,11 @@ export const updateAdminProfilePic = asynchandler(async (req, res) => {
       throw new Apierror(404, "Admin not found after update");
     }
 
-    console.log("✅ Admin profile picture updated in database");
 
     res.status(200).json(
       new Apiresponse(200, updatedAdmin, "Profile picture updated successfully")
     );
   } catch (error) {
-    console.error("Error updating admin profile picture:", error);
     throw new Apierror(500, "Failed to update profile picture");
   }
 });
@@ -253,7 +242,6 @@ export const updateAdminProfilePic = asynchandler(async (req, res) => {
 export const removeAdminProfilePic = asynchandler(async (req, res) => {
   try {
     const adminId = req.id;
-    console.log("🔍 Removing profile picture for admin:", adminId);
 
     const admin = await Admin.findById(adminId);
 
@@ -261,7 +249,6 @@ export const removeAdminProfilePic = asynchandler(async (req, res) => {
       throw new Apierror(404, "Admin not found");
     }
 
-    console.log("🔍 Current admin profile pic:", admin.profilePic);
 
     // Note: We don't delete from Cloudinary as it's not a local file path
     // Cloudinary URLs are managed separately
@@ -277,13 +264,11 @@ export const removeAdminProfilePic = asynchandler(async (req, res) => {
       throw new Apierror(404, "Admin not found after update");
     }
 
-    console.log("✅ Admin profile picture removed from database");
 
     res.status(200).json(
       new Apiresponse(200, updatedAdmin, "Profile picture removed successfully")
     );
   } catch (error) {
-    console.error("Error removing admin profile picture:", error);
     throw new Apierror(500, "Failed to remove profile picture");
   }
 });
@@ -295,7 +280,6 @@ export const logoutAdmin = asynchandler(async (req, res) => {
       new Apiresponse(200, {}, "Admin logged out successfully")
     );
   } catch (error) {
-    console.error("Error logging out admin:", error);
     throw new Apierror(500, "Failed to logout admin");
   }
 });

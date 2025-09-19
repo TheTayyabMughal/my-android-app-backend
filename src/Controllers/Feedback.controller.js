@@ -64,7 +64,7 @@ export const createFeedback = asynchandler(async (req, res) => {
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
-    console.error(err);
+(err);
     if (err.code === 11000) {
       return res.status(400).json({ success: false, message: "You have already submitted a review for this order." });
     }
@@ -140,7 +140,7 @@ export const getFeedbacksByProvider = asynchandler(async (req, res) => {
       reviews: reviews
     });
   } catch (error) {
-    console.error("Error fetching provider reviews:", error);
+("Error fetching provider reviews:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching reviews"
@@ -180,7 +180,7 @@ export const getProviderForFeedback = asynchandler(async (req, res) => {
       providers: providersWithRatings
     });
   } catch (error) {
-    console.error("Error fetching service providers:", error);
+("Error fetching service providers:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching service providers"

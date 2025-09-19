@@ -54,11 +54,9 @@ app.get("/", (req, res) => {
 
 // Error handling middleware (must be last)
 app.use((err, req, res, next) => {
-  console.error("Error middleware caught:", err);
   
   // If headers already sent, delegate to default Express error handler
   if (res.headersSent) {
-    console.log("Headers already sent, delegating to default handler");
     return next(err);
   }
   

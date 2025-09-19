@@ -108,8 +108,8 @@ export const verifyApplicationOtp = asynchandler(async (req, res) => {
 // });
 
 export const getAllApplications = asynchandler(async (req, res) => {
-  console.log("getAllApplications called");
-  console.log("Headers sent before response:", res.headersSent);
+("getAllApplications called");
+("Headers sent before response:", res.headersSent);
   
   const applications = await ServiceProviders.aggregate([
     {
@@ -134,14 +134,14 @@ export const getAllApplications = asynchandler(async (req, res) => {
     }
   ]);
 
-  console.log("Applications fetched:", applications.length);
-  console.log("Headers sent before sending response:", res.headersSent);
+("Applications fetched:", applications.length);
+("Headers sent before sending response:", res.headersSent);
   
   const response = new Apiresponse(200, applications, "Applications fetched successfully");
-  console.log("Response object created:", response);
+("Response object created:", response);
   
   res.status(200).json(response);
-  console.log("Response sent successfully");
+("Response sent successfully");
 });
 
 export const getAllPendingApplications = asynchandler(async (req, res) => {
@@ -191,16 +191,16 @@ export const updateApplication = asynchandler(async (req, res) => {
       : `Dear ${application.username},\n\nWe regret to inform you that your application has been rejected. Please contact support for further details.\n\nBest regards,\nTailorWash Team`;
 
     try {
-      console.log(`📧 Attempting to send email to: ${application.email}`);
-      console.log(`📧 Email subject: ${emailSubject}`);
-      console.log(`📧 Application status: ${approvalFromAdmin ? 'Approved' : 'Rejected'}`);
+(`📧 Attempting to send email to: ${application.email}`);
+(`📧 Email subject: ${emailSubject}`);
+(`📧 Application status: ${approvalFromAdmin ? 'Approved' : 'Rejected'}`);
       
       const emailResult = await sendEmail(application.email, emailSubject, emailMessage);
-      console.log(`✅ Email notification sent successfully to ${application.email} for ${approvalFromAdmin ? 'Approved' : 'Rejected'} status`);
-      console.log(`📧 Email result:`, emailResult);
+(`✅ Email notification sent successfully to ${application.email} for ${approvalFromAdmin ? 'Approved' : 'Rejected'} status`);
+(`📧 Email result:`, emailResult);
     } catch (emailError) {
-      console.error("❌ Failed to send email notification:", emailError.message);
-      console.error("❌ Email error details:", emailError);
+("❌ Failed to send email notification:", emailError.message);
+("❌ Email error details:", emailError);
       // Don't throw error - application status should still be updated even if email fails
     }
   }
@@ -219,7 +219,7 @@ export const updateApplicationStatus = asynchandler(async (req, res) => {
   const { status } = req.body;
   const { id: applicationId } = req.params;
 
-  console.log(status)
+(status)
 
   if (!["Approved", "Rejected"].includes(status)) {
     throw new Apierror(400, "Invalid status. Must be 'Approved' or 'Rejected'.");
@@ -270,16 +270,16 @@ export const updateApplicationStatus = asynchandler(async (req, res) => {
       : `Dear ${application.username},\n\nWe regret to inform you that your application has been rejected. Please contact support for further details.\n\nBest regards,\nYour Company`;
 
   try {
-    console.log(`📧 Attempting to send email to: ${application.email}`);
-    console.log(`📧 Email subject: ${emailSubject}`);
-    console.log(`📧 Application status: ${status}`);
+(`📧 Attempting to send email to: ${application.email}`);
+(`📧 Email subject: ${emailSubject}`);
+(`📧 Application status: ${status}`);
     
     const emailResult = await sendEmail(application.email, emailSubject, emailMessage);
-    console.log(`✅ Email notification sent successfully to ${application.email} for ${status} status`);
-    console.log(`📧 Email result:`, emailResult);
+(`✅ Email notification sent successfully to ${application.email} for ${status} status`);
+(`📧 Email result:`, emailResult);
   } catch (emailError) {
-    console.error("❌ Failed to send email notification:", emailError.message);
-    console.error("❌ Email error details:", emailError);
+("❌ Failed to send email notification:", emailError.message);
+("❌ Email error details:", emailError);
     // Don't throw error - application status should still be updated even if email fails
   }
 

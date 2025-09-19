@@ -11,7 +11,6 @@ let isConnected = false;
 
 const connectDB = async () => {
   if (isConnected) {
-    console.log('Using existing database connection');
     return;
   }
 
@@ -21,9 +20,7 @@ const connectDB = async () => {
       useUnifiedTopology: true,
     });
     isConnected = true;
-    console.log('MongoDB connected successfully');
   } catch (error) {
-    console.error('MongoDB connection error:', error);
     isConnected = false;
   }
 };

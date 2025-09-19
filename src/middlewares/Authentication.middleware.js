@@ -22,7 +22,7 @@ const verifyJWT = asynchandler(async (req, res, next) => {
   try {
     decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
   } catch (err) {
-    console.error("JWT Verification Error:", err.message);
+("JWT Verification Error:", err.message);
     throw new Apierror(401, "❌ Invalid or expired token");
   }
 
@@ -31,7 +31,7 @@ const verifyJWT = asynchandler(async (req, res, next) => {
   if (decoded.role === "admin" || decoded.role === "super_admin") {
     // For admin users, find in Admin collection
     user = await Admin.findById(decoded._id).select("-password");
-    console.log("Found Admin:", user);
+("Found Admin:", user);
     if (!user) {
       throw new Apierror(401, "❌ Unauthorized: Invalid token (admin not found)");
     }
@@ -40,10 +40,10 @@ const verifyJWT = asynchandler(async (req, res, next) => {
     return next();
   } else if (decoded.role === "provider") {
     user = await ServiceProviders.findById(decoded._id).select("-password -refreshToken");
-    console.log("Found Provider:", user);
+("Found Provider:", user);
   } else {
     user = await Users.findById(decoded._id).select("-password -refreshToken");
-    console.log("Found User:", user);
+("Found User:", user);
   }
 
   if (!user) {

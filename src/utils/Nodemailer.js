@@ -13,16 +13,16 @@ dotenv.config();
 // });
 
 // Debug environment variables
-console.log("🔍 Environment variables check:");
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "***hidden***" : "NOT SET");
-console.log("EMAIL_HOST:", process.env.EMAIL_HOST);
-console.log("EMAIL_PORT:", process.env.EMAIL_PORT);
+("🔍 Environment variables check:");
+("EMAIL_USER:", process.env.EMAIL_USER);
+("EMAIL_PASS:", process.env.EMAIL_PASS ? "***hidden***" : "NOT SET");
+("EMAIL_HOST:", process.env.EMAIL_HOST);
+("EMAIL_PORT:", process.env.EMAIL_PORT);
 
 // Check if environment variables are loaded
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.error("❌ Email credentials not found in environment variables!");
-  console.error("❌ Please create .env file with EMAIL_USER and EMAIL_PASS");
+("❌ Email credentials not found in environment variables!");
+("❌ Please create .env file with EMAIL_USER and EMAIL_PASS");
 }
 
 const transporter = nodemailer.createTransport({
@@ -59,22 +59,22 @@ const transporter = nodemailer.createTransport({
 // Test transporter configuration
 transporter.verify((error, success) => {
   if (error) {
-    console.error("❌ Email transporter verification failed:", error);
-    console.error("❌ Please generate new Gmail App Password");
+("❌ Email transporter verification failed:", error);
+("❌ Please generate new Gmail App Password");
   } else {
-    console.log("✅ Email transporter is ready to send emails");
+("✅ Email transporter is ready to send emails");
   }
 });
 
 export const sendEmail = async (to, subject, text) => {
   try {
-    console.log("📧 Starting email send process...");
-    console.log("📧 To:", to);
-    console.log("📧 Subject:", subject);
-    console.log("📧 From:", process.env.EMAIL_USER || "adnanamin.online@gmail.com");
-    console.log("📧 Host:", process.env.EMAIL_HOST || "smtp.gmail.com");
-    console.log("📧 Port:", process.env.EMAIL_PORT || 587);
-    console.log("📧 Text length:", text.length);
+("📧 Starting email send process...");
+("📧 To:", to);
+("📧 Subject:", subject);
+("📧 From:", process.env.EMAIL_USER || "adnanamin.online@gmail.com");
+("📧 Host:", process.env.EMAIL_HOST || "smtp.gmail.com");
+("📧 Port:", process.env.EMAIL_PORT || 587);
+("📧 Text length:", text.length);
     
     const mailOptions = {
       from: process.env.EMAIL_USER || "adnanamin.online@gmail.com",
@@ -83,18 +83,18 @@ export const sendEmail = async (to, subject, text) => {
       text,
     };
 
-    console.log("📧 Mail options:", mailOptions);
+("📧 Mail options:", mailOptions);
     
     const result = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email sent successfully to ${to}`);
-    console.log(`📧 Message ID: ${result.messageId}`);
-    console.log(`📧 Response:`, result.response);
+(`✅ Email sent successfully to ${to}`);
+(`📧 Message ID: ${result.messageId}`);
+(`📧 Response:`, result.response);
     return result;
   } catch (error) {
-    console.error("❌ Error sending email:", error);
-    console.error("❌ Error details:", error.message);
-    console.error("❌ Error code:", error.code);
-    console.error("❌ Full error:", error);
+("❌ Error sending email:", error);
+("❌ Error details:", error.message);
+("❌ Error code:", error.code);
+("❌ Full error:", error);
     throw new Error(`Failed to send email: ${error.message}`);
   }
 };

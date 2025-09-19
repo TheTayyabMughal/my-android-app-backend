@@ -36,7 +36,6 @@ const uploadonCloudinaryFromBuffer = async (fileBuffer, originalName) => {
         
         return response;
     } catch (error) {
-        console.error("Cloudinary upload error:", error);
         return null;
     }
 };
@@ -57,7 +56,6 @@ const smartUpload = async (file) => {
             return await uploadonCloudinary(file.path);
         }
     } catch (error) {
-        console.error("Smart upload error:", error);
         return null;
     }
 };

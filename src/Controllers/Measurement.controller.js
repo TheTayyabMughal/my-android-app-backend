@@ -89,7 +89,7 @@ export const createMeasurement = asynchandler(async (req, res) => {
           : "Measurement updated successfully & order updated",
     });
   } catch (error) {
-    console.error("Error in addMeasurement:", error);
+("Error in addMeasurement:", error);
     await session.abortTransaction();
     return res.status(500).json({
       success: false,
@@ -195,7 +195,7 @@ export const getMeasurementsWithProvider = asynchandler(async (req, res) => {
       data: measurementsWithProviders
     });
   } catch (error) {
-    console.error('Error fetching measurements:', error);
+('Error fetching measurements:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error while fetching measurements' 

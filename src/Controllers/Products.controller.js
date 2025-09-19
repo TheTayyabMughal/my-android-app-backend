@@ -173,7 +173,7 @@ const getProductsBySellerId = asynchandler(async (req, res) => {
 const getProductsByCategory = asynchandler(async (req, res) => {
   const { name } = req.params;
   const products = await Products.find({ Category: name });
-  console.log(products);
+(products);
   if (!products) {
     throw new Apierror(400, "No products found");
   }
@@ -190,7 +190,7 @@ const getProductsByCategory = asynchandler(async (req, res) => {
 const getProductsBybrand = asynchandler(async (req, res) => {
   const { name } = req.params;
   const products = await Products.find({ brand: name });
-  console.log(products);
+(products);
   if (!products) {
     throw new Apierror(400, "No products found");
   }

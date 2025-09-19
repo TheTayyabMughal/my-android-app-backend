@@ -29,7 +29,7 @@ const createPaymentIntent = asynchandler(async (req, res) => {
     });
     res.send({ clientSecret: paymentIntent.client_secret });
   } catch (err) {
-    console.error(err);
+(err);
     res.status(500).send({ error: err.message });
   }
 })
@@ -57,10 +57,10 @@ const sendEmailwithHTML = async (to, subject, html) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent successfully:", info.messageId);
+("✅ Email sent successfully:", info.messageId);
     return info;
   } catch (error) {
-    console.error("❌ Email send failed:", error.message);
+("❌ Email send failed:", error.message);
     throw error;
   }
 };
@@ -99,9 +99,9 @@ const createOrder = asynchandler(async (req, res) => {
         userId: savedOrder.userId,
         amount: savedOrder.totalPayment
       });
-      console.log("✅ Payment record created for order:", savedOrder.orderTrackingId);
+("✅ Payment record created for order:", savedOrder.orderTrackingId);
     } catch (paymentErr) {
-      console.error("⚠️ Failed to create payment record:", paymentErr.message);
+("⚠️ Failed to create payment record:", paymentErr.message);
       // Don't throw error here - order should still be created even if payment record fails
     }
 
@@ -132,7 +132,7 @@ const createOrder = asynchandler(async (req, res) => {
         `
       );
     } catch (emailErr) {
-      console.error("⚠️ Failed to send order confirmation email:", emailErr.message);
+("⚠️ Failed to send order confirmation email:", emailErr.message);
     }
 
     // ✅ Send notification email to service provider
@@ -190,10 +190,10 @@ const createOrder = asynchandler(async (req, res) => {
           </div>
           `
         );
-        console.log("✅ Provider notification email sent successfully");
+("✅ Provider notification email sent successfully");
       }
     } catch (providerEmailErr) {
-      console.error("⚠️ Failed to send provider notification email:", providerEmailErr.message);
+("⚠️ Failed to send provider notification email:", providerEmailErr.message);
     }
 
     return res.status(201).json({
@@ -201,7 +201,7 @@ const createOrder = asynchandler(async (req, res) => {
       order: savedOrder,
     });
   } catch (error) {
-    console.error("Error creating order:", error);
+("Error creating order:", error);
     return res.status(500).json({
       success: false,
       message: "Order creation failed",
@@ -455,14 +455,14 @@ const getProviderOrders = asynchandler(async (req, res) => {
       },
     ]);
 
-    console.log("Data: ", JSON.stringify(orders, null, 2));
+("Data: ", JSON.stringify(orders, null, 2));
 
     res.status(200).json({
       success: true,
       orders,
     });
   } catch (error) {
-    console.error("Error fetching provider orders:", error);
+("Error fetching provider orders:", error);
     res.status(500).json({ success: false, message: "Failed to fetch orders" });
   }
 });
@@ -490,10 +490,10 @@ const sendEmail = async (to, subject, text) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent successfully:", info.messageId);
+("✅ Email sent successfully:", info.messageId);
     return info;
   } catch (error) {
-    console.error("❌ Email send failed:", error.message);
+("❌ Email send failed:", error.message);
     throw error;
   }
 };
@@ -541,7 +541,7 @@ const updateOrderStatus = asynchandler(async (req, res) => {
         `Hello,\n\nYour order with Tracking ID ${updatedOrder.orderTrackingId} is now "${status}".\n\nThank you for using Tailorwash!`
       );
     } catch (emailErr) {
-      console.error("⚠️ Failed to send order status email to user:", emailErr.message);
+("⚠️ Failed to send order status email to user:", emailErr.message);
     }
 
     // Send email notification to service provider
@@ -554,10 +554,10 @@ const updateOrderStatus = asynchandler(async (req, res) => {
           `Order Status Updated: ${updatedOrder.orderTrackingId}`,
           `Hello ${serviceProvider.username},\n\nYou have updated the status of order ${updatedOrder.orderTrackingId} to "${status}".\n\nCustomer: ${updatedOrder.address.fullName}\nEmail: ${updatedOrder.address.email}\nPhone: ${updatedOrder.address.phoneNo}\n\nKeep up the great work!\n\nTeam Tailorwash`
         );
-        console.log("✅ Provider status update notification sent");
+("✅ Provider status update notification sent");
       }
     } catch (providerEmailErr) {
-      console.error("⚠️ Failed to send status update email to provider:", providerEmailErr.message);
+("⚠️ Failed to send status update email to provider:", providerEmailErr.message);
     }
 
     res.status(200).json({
@@ -565,7 +565,7 @@ const updateOrderStatus = asynchandler(async (req, res) => {
       message: "Order status updated and email sent (if possible)",
     });
   } catch (error) {
-    console.error(error);
+(error);
     res.status(500).json({
       success: false,
       message: "Failed to update order status",
@@ -632,9 +632,9 @@ const addMeasurements = asynchandler(async (req, res) => {
       `Measurements ${action} for Order: ${orderTrackingId}`,
       `Hello ${order.address.fullName},\n\nYour measurements have been ${action} for order ${orderTrackingId} by ${serviceProvider?.username || 'your service provider'}.\n\nOrder Details:\n- Tracking ID: ${orderTrackingId}\n- Service Provider: ${serviceProvider?.username || 'N/A'}\n- Status: Measurements ${action}\n\nYou can view your measurements in your account dashboard.\n\nThank you for using Tailorwash!\n\nTeam Tailorwash`
     );
-    console.log("✅ User measurement notification sent");
+("✅ User measurement notification sent");
   } catch (emailErr) {
-    console.error("⚠️ Failed to send measurement notification to user:", emailErr.message);
+("⚠️ Failed to send measurement notification to user:", emailErr.message);
   }
 
   res.status(200).json(
@@ -725,13 +725,13 @@ const cancelOrder = asynchandler(async (req, res) => {
 
       if (refund && refund.status === 'succeeded') {
         order.paymentStatus = "Refunded";
-        console.log(`Successfully processed refund for order ${id}`);
+(`Successfully processed refund for order ${id}`);
       } else {
         console.warn(`Refund created but status is ${refund?.status || 'unknown'} for order ${id}`);
         order.paymentStatus = "Refund Pending";
       }
     } catch (error) {
-      console.error("Refund failed:", error);
+("Refund failed:", error);
 
       // Add note about failed refund but continue with cancellation
       order.statusHistory.push({

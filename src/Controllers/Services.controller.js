@@ -26,7 +26,7 @@ export const getServiceById = asynchandler(async (req, res) => {
   if (!service) {
     throw new Apierror(404, "Service not found");
   }
-  console.log(service);
+(service);
   res.status(200).json(new Apiresponse(200, service, "Service fetched successfully"));
 });
 
@@ -78,7 +78,7 @@ export const getServicesForProvider = asynchandler(async (req, res) => {
       services: services
     });
   } catch (err) {
-    console.error("Error fetching provider services:", err);
+("Error fetching provider services:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

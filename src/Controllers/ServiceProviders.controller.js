@@ -40,7 +40,7 @@ export const getProviderProfile = asynchandler(async (req, res) => {
       data: provider
     });
   } catch (error) {
-    console.error("Error fetching provider profile:", error);
+("Error fetching provider profile:", error);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -71,7 +71,7 @@ export const getProfileStatus = asynchandler(async (req, res) => {
       }
     });
   } catch (err) {
-    console.error("Error fetching profile status:", err);
+("Error fetching profile status:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

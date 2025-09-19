@@ -53,7 +53,6 @@ const generateAccessAndRefreshTokens = async (userId, role) => {
 
     return { accessToken, refreshToken };
   } catch (error) {
-    console.error("Error generating tokens:", error);
     throw new Apierror(500, "Error generating access and refresh tokens");
   }
 };
@@ -140,9 +139,7 @@ const testSendMail = async () => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("Test email sent successfully:", info.response);
   } catch (error) {
-    console.error("Error sending test email:", error);
   }
 };
 
@@ -175,7 +172,6 @@ const registerUser = asynchandler(async (req, res) => {
           profilePicUrl = profilePicResponse.url;
         }
       } catch (uploadError) {
-        console.error("Profile picture upload error:", uploadError);
         return res
           .status(400)
           .json({ success: false, message: "Error uploading profile picture" });
@@ -202,7 +198,6 @@ const registerUser = asynchandler(async (req, res) => {
         user: userResponse
       });
   } catch (err) {
-    console.error("Registration error:", err);
     return res
       .status(500)
       .json({ success: false, message: "Internal server error" });
@@ -264,7 +259,6 @@ const getProfileInfo = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error fetching profile info:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -313,7 +307,6 @@ const updateProfilePic = asynchandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error updating profile picture:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -346,7 +339,6 @@ const removeProfilePic = asynchandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error removing profile picture:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -382,7 +374,6 @@ const getProviderProfileInfo = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error fetching provider profile info:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -438,7 +429,6 @@ const updateProviderProfilePic = asynchandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error updating provider profile picture:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -478,7 +468,6 @@ const removeProviderProfilePic = asynchandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error removing provider profile picture:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -557,7 +546,6 @@ const updateProviderProfile = asynchandler(async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error updating provider profile:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error"
@@ -570,7 +558,6 @@ const updateProviderProfile = asynchandler(async (req, res) => {
 const sendOtp = async (user) => {
   const otp = ("" + Math.random()).substring(2, 6);
   user.otp = otp;
-  console.log("Generated OTP for login:", otp);
   user.otpExpiry = Date.now() + 5 * 60 * 1000;
   await user.save();
 
@@ -631,10 +618,8 @@ const sendEmail = async (to, subject, message, actionText = null, actionUrl = nu
 
     // 4️⃣ Send Email
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email sent to ${to}: ${info.messageId}`);
     return info;
   } catch (error) {
-    console.error("❌ Failed to send email:", error);
     throw error;
   }
 };
@@ -762,8 +747,6 @@ const verifyOtp = asynchandler(async (req, res) => {
 
 const registerProvider = asynchandler(async (req, res) => {
   try {
-    console.log("Provider registration request body:", req.body);
-    console.log("Provider registration request file:", req.file);
     
     const { username, email, password, services, phoneNo, shopAddress, currentLocation } = req.body;
 
@@ -825,7 +808,6 @@ const registerProvider = asynchandler(async (req, res) => {
           profilePicUrl = profilePicResponse.url;
         }
       } catch (uploadError) {
-        console.error("Profile picture upload error:", uploadError);
         return res
           .status(400)
           .json({ success: false, message: "Error uploading profile picture" });
@@ -855,7 +837,6 @@ const registerProvider = asynchandler(async (req, res) => {
     });
 
   } catch (err) {
-    console.error("🔥 Error in registerProvider:", err);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
