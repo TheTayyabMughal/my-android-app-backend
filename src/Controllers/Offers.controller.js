@@ -133,7 +133,7 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
 
     const nearbyProviders = await ServiceProviders.find(query)
       .populate('servicesOffered', 'name description')
-      .select('username phoneNo shopAddress servicesOffered currentLocation profilePic');
+      .select('username phoneNo shopAddress servicesOffered currentLocation profilePic deliveryCharges rating');
 
 (`📍 Found ${nearbyProviders.length} nearby providers`);
     if (search && search.trim()) {
@@ -169,6 +169,8 @@ export const getNearbyOffers = asynchandler(async (req, res) => {
           servicesOffered: provider.servicesOffered,
           profilePic: provider.profilePic,
           location: provider.currentLocation.coordinates,
+          deliveryCharges: provider.deliveryCharges,
+          rating: provider.rating,
         },
         offers: providerOffers.map(offer => ({
           _id: offer._id,

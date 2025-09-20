@@ -74,6 +74,11 @@ const ServiceProviderSchema = new Schema(
       accountTitle: String,
       accountNumber: String,
       bankName: String
+    },
+    deliveryCharges: {
+      type: Number,
+      default: 0,
+      min: 0
     }
   },
   { timestamps: true }

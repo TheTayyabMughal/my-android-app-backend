@@ -6,6 +6,7 @@ import { ServiceProviders } from "../models/ServiceProviders.model.js";
 import { Riders } from "../models/Rider.model.js";
 import { Users } from "../models/Users.model.js";
 import { Measurements } from "../models/Measurements.model.js";
+import { Admin } from "../models/Admin.model.js";
 import { createPaymentRecord } from "./Payment.controller.js";
 import Stripe from 'stripe';
 import mongoose from "mongoose";
@@ -558,6 +559,56 @@ const updateOrderStatus = asynchandler(async (req, res) => {
       }
     } catch (providerEmailErr) {
 ("⚠️ Failed to send status update email to provider:", providerEmailErr.message);
+    }
+
+    // Send email notification to admin when order is delivered
+    if (status === "delivered") {
+      try {
+        // Get admin email directly (only one admin)
+        const admin = await Admin.findOne().select('email username');
+        
+        if (admin && admin.email) {
+          const serviceProvider = await ServiceProviders.findById(updatedOrder.serviceProviderId).select('username');
+          
+          // Create detailed email content for admin
+          const adminEmailContent = `
+Order Delivered Notification
+
+Dear Admin,
+
+An order has been successfully delivered by a service provider.
+
+Order Details:
+- Order Tracking ID: ${updatedOrder.orderTrackingId}
+- Customer Name: ${updatedOrder.address.fullName}
+- Customer Email: ${updatedOrder.address.email}
+- Customer Phone: ${updatedOrder.address.phoneNo}
+- Service Provider: ${serviceProvider?.username || 'N/A'}
+- Total Amount: PKR ${updatedOrder.totalPayment?.toFixed(2) || '0.00'}
+- Delivery Address: ${updatedOrder.address.homeAddress}
+- Status: Delivered
+- Delivered At: ${new Date().toLocaleString()}
+
+Services Ordered:
+${updatedOrder.services?.map(service => `- ${service.name} x${service.quantity} (PKR ${service.price})`).join('\n') || 'No services listed'}
+
+This order has been completed successfully. Please review the order details and ensure all payments are processed correctly.
+
+Best regards,
+Tailorwash System
+          `;
+
+          // Send email to admin
+          await sendEmail(
+            admin.email,
+            `Order Delivered: ${updatedOrder.orderTrackingId} - PKR ${updatedOrder.totalPayment?.toFixed(2) || '0.00'}`,
+            adminEmailContent
+          );
+          console.log("✅ Admin delivery notification sent to:", admin.email);
+        }
+      } catch (adminEmailErr) {
+        console.log("⚠️ Failed to send delivery notification to admin:", adminEmailErr.message);
+      }
     }
 
     res.status(200).json({

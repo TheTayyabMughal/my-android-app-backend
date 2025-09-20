@@ -8,7 +8,9 @@ import {
   getServiceProviderHistoryById,
   getNearestServiceProviders,
   getProviderProfile,
-  getProfileStatus
+  getProfileStatus,
+  updateProviderDeliveryCharges,
+  getProviderDeliveryCharges
 } from "../Controllers/ServiceProviders.controller.js";
 import { verifyAdmin, verifyJWT } from "../middlewares/Authentication.middleware.js";
 
@@ -25,5 +27,7 @@ router.route("/getNearest").get(getNearestServiceProviders);
 router.route("/update/:id").put(updateServiceProvider);
 router.route("/delete/:id").delete( verifyJWT,verifyAdmin,deleteServiceProvider);
 router.route("/getProfileStatus").get(verifyJWT,getProfileStatus)
+router.route("/update-delivery-charges").patch(verifyJWT,updateProviderDeliveryCharges);
+router.route("/get-delivery-charges").get(verifyJWT,getProviderDeliveryCharges);
 
 export default router;

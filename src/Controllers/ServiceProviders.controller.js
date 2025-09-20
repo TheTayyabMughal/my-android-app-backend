@@ -197,6 +197,47 @@ export const updateServiceProvider = asynchandler(async (req, res) => {
   res.status(200).json(new Apiresponse(200, serviceProvider, "Service provider updated successfully"));
 });
 
+export const updateProviderDeliveryCharges = asynchandler(async (req, res) => {
+  const { deliveryCharges } = req.body;
+  const providerId = req.id; // From JWT middleware
+
+  if (deliveryCharges < 0) {
+    throw new Apierror(400, "Delivery charges cannot be negative");
+  }
+
+  const updatedProvider = await ServiceProviders.findByIdAndUpdate(
+    providerId,
+    { deliveryCharges },
+    { new: true }
+  ).select("username email shopAddress deliveryCharges");
+
+  if (!updatedProvider) {
+    throw new Apierror(404, "Service provider not found");
+  }
+
+  res
+    .status(200)
+    .json(new Apiresponse(200, updatedProvider, "Delivery charges updated successfully"));
+});
+
+export const getProviderDeliveryCharges = asynchandler(async (req, res) => {
+  const providerId = req.id; // From JWT middleware
+
+  const provider = await ServiceProviders.findById(providerId)
+    .select("username deliveryCharges");
+
+  if (!provider) {
+    throw new Apierror(404, "Service provider not found");
+  }
+
+  res
+    .status(200)
+    .json(new Apiresponse(200, { 
+      deliveryCharges: provider.deliveryCharges || 0,
+      username: provider.username 
+    }, "Delivery charges fetched successfully"));
+});
+
 
 export const deleteServiceProvider = asynchandler(async (req, res) => {
   const serviceProvider = await ServiceProviders.findById(req.params.id);
