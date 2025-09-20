@@ -251,30 +251,20 @@ export const toggleOfferById = asynchandler(async (req, res) => {
 
 export const updateOffer = asynchandler(async (req, res) => {
   const {
-    price,
     title,
     description,
     discountPercentage,
-    validFrom,
-    validUntil,
     servicesIncluded,
-    termsAndConditions,
-    isActive,
   } = req.body;
 
   const updatedOffer = await Offers.findByIdAndUpdate(
     req.params.id,
     {
       $set: {
-        price,
         title,
         description,
         discountPercentage,
-        validFrom,
-        validUntil,
         servicesIncluded,
-        termsAndConditions,
-        isActive,
       },
     },
     { new: true }

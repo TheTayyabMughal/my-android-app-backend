@@ -2,6 +2,7 @@ import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import crypto from "crypto"
 import { type } from "os";
+import bcrypt from "bcryptjs";
 
 const ServiceProviderSchema = new Schema(
   {
@@ -27,6 +28,9 @@ const ServiceProviderSchema = new Schema(
     },
     otp: { type: String },
     otpExpiry: { type: Date },
+    resetPasswordOtp: { type: String },
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
     password: {
       type: String,
       required: true,
@@ -74,6 +78,18 @@ const ServiceProviderSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Hash password before saving
+ServiceProviderSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+// Compare password
+ServiceProviderSchema.methods.isPasswordCorrect = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
 
 // ✅ Add JWT methods on ServiceProviderSchema instead of UserSchema
 ServiceProviderSchema.methods.generateAccessToken = function () {

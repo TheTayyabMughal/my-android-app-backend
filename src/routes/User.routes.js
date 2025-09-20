@@ -20,7 +20,9 @@ import {
   getProviderProfileInfo,
   updateProviderProfilePic,
   removeProviderProfilePic,
-  updateProviderProfile
+  updateProviderProfile,
+  forgotPasswordNew,
+  resetPasswordNew
 } from "../Controllers/User.controller.js";
 import { uploadProfilePic } from "../middlewares/Multer.middleware.js";
 import { verifyJWT } from "../middlewares/Authentication.middleware.js";
@@ -45,6 +47,10 @@ router.route("/updatestep2").put(verifyJWT, updatePasswordStep2);
 
 router.route("/forgotPassword").post(forgotPassword);
 router.route("/resetPassword").put(resetPassword);
+
+// New Separate Forgot Password Routes
+router.route("/forgot-password").post(forgotPasswordNew);
+router.route("/reset-password").put(resetPasswordNew);
 
 // Profile picture routes
 router.route("/profile-pic").put(verifyJWT, uploadProfilePic, updateProfilePic);

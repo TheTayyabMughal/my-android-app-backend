@@ -2,6 +2,7 @@ import { asynchandler } from "../utils/Asynchandler.js";
 import { Apiresponse } from "../utils/Apiresponse.js";
 import { Apierror } from "../utils/Apierror.js";
 import { Admin } from "../models/Admin.model.js";
+import { Notification } from "../models/Notification.model.js";
 import { smartUpload } from "../utils/Fileupload.js";
 import fs from "fs";
 
@@ -281,5 +282,137 @@ export const logoutAdmin = asynchandler(async (req, res) => {
     );
   } catch (error) {
     throw new Apierror(500, "Failed to logout admin");
+  }
+});
+
+// Create Notification
+export const createNotification = asynchandler(async (req, res) => {
+  try {
+    const { title, description, role } = req.body;
+    const adminId = req.user._id;
+
+    if (!title || !description || !role) {
+      throw new Apierror(400, "Title, description, and role are required");
+    }
+
+    const notification = await Notification.create({
+      title,
+      description,
+      role,
+      createdBy: adminId,
+    });
+
+    const populatedNotification = await Notification.findById(notification._id)
+      .populate("createdBy", "username email");
+
+    res.status(201).json(
+      new Apiresponse(201, populatedNotification, "Notification created successfully")
+    );
+  } catch (error) {
+    throw new Apierror(500, "Failed to create notification");
+  }
+});
+
+// Get All Notifications
+export const getNotifications = asynchandler(async (req, res) => {
+  try {
+    const notifications = await Notification.find({ isActive: true })
+      .populate("createdBy", "username email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(
+      new Apiresponse(200, notifications, "Notifications fetched successfully")
+    );
+  } catch (error) {
+    throw new Apierror(500, "Failed to fetch notifications");
+  }
+});
+
+// Get Notification by ID
+export const getNotificationById = asynchandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notification = await Notification.findById(id)
+      .populate("createdBy", "username email");
+
+    if (!notification) {
+      throw new Apierror(404, "Notification not found");
+    }
+
+    res.status(200).json(
+      new Apiresponse(200, notification, "Notification fetched successfully")
+    );
+  } catch (error) {
+    throw new Apierror(500, "Failed to fetch notification");
+  }
+});
+
+// Update Notification
+export const updateNotification = asynchandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, role } = req.body;
+
+    if (!title || !description || !role) {
+      throw new Apierror(400, "Title, description, and role are required");
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
+      { title, description, role },
+      { new: true, runValidators: true }
+    ).populate("createdBy", "username email");
+
+    if (!notification) {
+      throw new Apierror(404, "Notification not found");
+    }
+
+    res.status(200).json(
+      new Apiresponse(200, notification, "Notification updated successfully")
+    );
+  } catch (error) {
+    throw new Apierror(500, "Failed to update notification");
+  }
+});
+
+// Delete Notification
+export const deleteNotification = asynchandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
+      { isActive: false },
+      { new: true }
+    );
+
+    if (!notification) {
+      throw new Apierror(404, "Notification not found");
+    }
+
+    res.status(200).json(
+      new Apiresponse(200, {}, "Notification deleted successfully")
+    );
+  } catch (error) {
+    throw new Apierror(500, "Failed to delete notification");
+  }
+});
+
+// Get Notifications by Role (for customers and providers)
+export const getNotificationsByRole = asynchandler(async (req, res) => {
+  try {
+    const { role } = req.params;
+
+    const notifications = await Notification.find({
+      role: role,
+      isActive: true
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json(
+      new Apiresponse(200, notifications, "Notifications fetched successfully")
+    );
+  } catch (error) {
+    throw new Apierror(500, "Failed to fetch notifications");
   }
 });

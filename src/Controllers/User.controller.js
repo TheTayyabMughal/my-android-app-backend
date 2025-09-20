@@ -641,39 +641,45 @@ const Loginuser = asynchandler(async (req, res) => {
   } 
   else if (role === "provider") {
     user = await ServiceProviders.findOne({ email: email.toLowerCase() });
+    console.log("Provider login attempt:", { 
+      email: email.toLowerCase(), 
+      userFound: !!user, 
+      approvalStatus: user?.approvalFromAdmin,
+      providerId: user?._id 
+    });
 
     // ✅ Check if provider account is approved by admin
     if (user && user.approvalFromAdmin === false) {
+      console.log("Provider account not approved:", user.email);
       return res
         .status(403)
-        .json(new Apiresponse(403, null, "Your account is not yet approved by admin."));
+        .json(new Apiresponse(403, null, "Your account is not yet approved by admin. Please wait for admin approval or contact support."));
     }
   }
   else if (role === "Admin") {
-    // Find admin by email in database
     user = await Admin.findOne({ email: email.toLowerCase() });
-    
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    // Check password
-    const isPasswordValid = await user.isPasswordCorrect(password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
   }
 
   if (!user) throw new Apierror(400, "User not found, please sign up first");
 
-  // Compare password (only for non-Admin users)
-  if (role !== "Admin") {
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+  // Compare password using model method (consistent for all roles)
+  const isPasswordValid = await user.isPasswordCorrect(password);
+  console.log("Password validation:", { 
+    email: user.email, 
+    role, 
+    isValid: isPasswordValid,
+    hasPassword: !!user.password 
+  });
+  
+  if (!isPasswordValid) {
+      console.log("Invalid password for:", user.email);
+      console.log("This could be due to:");
+      console.log("1. Wrong password entered");
+      console.log("2. Double-hashed password in database (fixed in latest code)");
+      console.log("3. Provider account not approved");
       return res
         .status(401)
         .json(new Apiresponse(401, null, "Invalid credentials"));
-    }
   }
 
   // ✅ Generate 6-digit OTP
@@ -814,11 +820,11 @@ const registerProvider = asynchandler(async (req, res) => {
       }
     }
 
-    // Hash password and create provider
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Create provider (password will be hashed automatically by pre-save middleware)
+    console.log("Creating provider with email:", email.toLowerCase());
     const newProvider = await ServiceProviders.create({
       username: username.toLowerCase(),
-      password: hashedPassword,
+      password: password, // Let the model handle hashing
       email: email.toLowerCase(),
       servicesOffered: parsedServices,
       shopAddress,
@@ -826,6 +832,7 @@ const registerProvider = asynchandler(async (req, res) => {
       phoneNo,
       profilePic: profilePicUrl,
     });
+    console.log("Provider created successfully with ID:", newProvider._id);
 
     // Return provider data without password
     const providerResponse = await ServiceProviders.findById(newProvider._id).select("-password");
@@ -1036,5 +1043,146 @@ const updateInfo = asynchandler(async (req, res) => {
   );
 });
 
-export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo, updateProfilePic, removeProfilePic, getProviderProfileInfo, updateProviderProfilePic, removeProviderProfilePic, updateProviderProfile };
+// ===== SEPARATE FORGOT PASSWORD FUNCTIONALITY =====
+const forgotPasswordNew = asynchandler(async (req, res) => {
+  const { email, role } = req.body;
+  
+  if (!email || !role) {
+    throw new Apierror(400, "Email and role are required");
+  }
+
+  let user;
+
+  // Find user based on role
+  if (role === "provider") {
+    user = await ServiceProviders.findOne({ email });
+  } else if (role === "Admin") {
+    user = await Admin.findOne({ email });
+  } else if (role === "customer") {
+    user = await Users.findOne({ email });
+  } else {
+    throw new Apierror(400, "Invalid role provided");
+  }
+
+  if (!user) {
+    throw new Apierror(404, `Email not found for ${role} role`);
+  }
+
+  // Generate 6-digit OTP for password reset
+  const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // Generate reset token
+  const resetToken = jwt.sign({ 
+    userId: user._id, 
+    role: role,
+    email: email,
+    type: "password_reset"
+  }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "10m" });
+
+  // Store reset OTP and token in user document (separate from login OTP)
+  user.resetPasswordOtp = resetOtp;
+  user.resetPasswordToken = resetToken;
+  user.resetPasswordExpires = Date.now() + 600000; // 10 minutes
+  await user.save({ validateBeforeSave: false });
+
+  // Send OTP via email
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: user.email,
+    subject: "Password Reset OTP - TailorWash",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8A63D2;">Password Reset Request</h2>
+        <p>Hello ${user.username || user.name || 'User'},</p>
+        <p>You have requested to reset your password. Please use the following OTP to reset your password:</p>
+        <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+          <h1 style="color: #8A63D2; margin: 0; font-size: 32px; letter-spacing: 5px;">${resetOtp}</h1>
+        </div>
+        <p><strong>This OTP will expire in 10 minutes.</strong></p>
+        <p>If you didn't request this password reset, please ignore this email.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #666; font-size: 12px;">This is an automated message from TailorWash. Please do not reply to this email.</p>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (emailError) {
+    throw new Apierror(500, "Failed to send email. Please try again.");
+  }
+  
+  res.status(200).json(new Apiresponse(200, { 
+    resetToken,
+    message: "OTP sent to your email address" 
+  }, "OTP sent successfully"));
+});
+
+const resetPasswordNew = asynchandler(async (req, res) => {
+  const { email, role, resetToken, otp, newPassword } = req.body;
+  
+  if (!email || !role || !resetToken || !otp || !newPassword) {
+    throw new Apierror(400, "Email, role, reset token, OTP, and new password are required");
+  }
+
+  try {
+    // Verify the reset token
+    const decoded = jwt.verify(resetToken, process.env.ACCESS_TOKEN_SECRET);
+    
+    if (decoded.email !== email || decoded.role !== role || decoded.type !== "password_reset") {
+      throw new Apierror(400, "Invalid reset token");
+    }
+
+    let user;
+    
+    // Find user based on role
+    if (role === "provider") {
+      user = await ServiceProviders.findById(decoded.userId);
+    } else if (role === "Admin") {
+      user = await Admin.findById(decoded.userId);
+    } else if (role === "customer") {
+      user = await Users.findById(decoded.userId);
+    } else {
+      throw new Apierror(400, "Invalid role provided");
+    }
+
+    if (!user) {
+      throw new Apierror(404, "User not found");
+    }
+
+    // Check if reset token matches and hasn't expired
+    if (!user.resetPasswordToken || user.resetPasswordToken !== resetToken) {
+      throw new Apierror(400, "Invalid reset token");
+    }
+
+    if (user.resetPasswordExpires < Date.now()) {
+      throw new Apierror(400, "Reset token has expired. Please request a new OTP");
+    }
+
+    // Verify reset OTP (separate from login OTP)
+    if (!user.resetPasswordOtp || user.resetPasswordOtp !== otp) {
+      throw new Apierror(400, "Invalid OTP");
+    }
+
+    // Update password (pre-save middleware will hash it automatically)
+    user.password = newPassword;
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    
+    await user.save({ validateBeforeSave: false });
+
+    res.status(200).json(new Apiresponse(200, null, "Password reset successfully"));
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      throw new Apierror(400, "Invalid reset token");
+    }
+    if (error.name === 'TokenExpiredError') {
+      throw new Apierror(400, "Reset token has expired. Please request a new OTP");
+    }
+    throw error;
+  }
+});
+
+export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo, updateProfilePic, removeProfilePic, getProviderProfileInfo, updateProviderProfilePic, removeProviderProfilePic, updateProviderProfile, forgotPasswordNew, resetPasswordNew };
 

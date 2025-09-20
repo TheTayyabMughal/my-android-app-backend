@@ -29,7 +29,7 @@ router.route("/getbyprovider/:providerId").get(getOffersByServiceProvider);
 router.route("/getbytoken").get(verifyJWT,verifyProvider,getOffersByToken);
 //router.route("/create").post( verifyJWT,verifyProvider,createOffer);
 router.route("/create").post(verifyJWT,createOffer);
-router.route("/delete/:id").delete( verifyJWT,verifyProviderOrAdmin,deleteOffer);
-router.route("/update/:id").put( verifyJWT,verifyProvider,updateOffer);
+router.route("/delete/:id").delete(verifyJWT,deleteOffer);
+router.route("/update/:id").put(verifyJWT,updateOffer);
 
 export default router;
