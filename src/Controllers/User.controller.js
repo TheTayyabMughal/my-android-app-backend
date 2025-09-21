@@ -478,13 +478,13 @@ const removeProviderProfilePic = asynchandler(async (req, res) => {
 const updateProviderProfile = asynchandler(async (req, res) => {
   try {
     const providerId = req.id;
-    const { username, phoneNo, shopAddress } = req.body;
+    const { username, phoneNo } = req.body;
 
     // Validate required fields
-    if (!username || !phoneNo || !shopAddress) {
+    if (!username || !phoneNo) {
       return res.status(400).json({
         success: false,
-        message: "Username, phone number, and shop address are required"
+        message: "Username and phone number are required"
       });
     }
 
@@ -519,11 +519,10 @@ const updateProviderProfile = asynchandler(async (req, res) => {
       providerId,
       {
         username: username.toLowerCase(),
-        phoneNo,
-        shopAddress
+        phoneNo
       },
       { new: true }
-    ).select('username email profilePic phoneNo shopAddress servicesOffered');
+    ).select('username email profilePic phoneNo shopAddress servicesOffered currentLocation');
 
     if (!updatedProvider) {
       return res.status(404).json({
@@ -541,7 +540,78 @@ const updateProviderProfile = asynchandler(async (req, res) => {
         profilePic: updatedProvider.profilePic,
         phoneNo: updatedProvider.phoneNo,
         shopAddress: updatedProvider.shopAddress,
-        servicesOffered: updatedProvider.servicesOffered
+        servicesOffered: updatedProvider.servicesOffered,
+        currentLocation: updatedProvider.currentLocation
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+const updateProviderShopAddress = asynchandler(async (req, res) => {
+  try {
+    const providerId = req.id;
+    const { shopAddress, latitude, longitude } = req.body;
+
+    // Validate required fields
+    if (!shopAddress || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Shop address, latitude, and longitude are required"
+      });
+    }
+
+    // Validate latitude and longitude
+    if (latitude < -90 || latitude > 90) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid latitude. Must be between -90 and 90"
+      });
+    }
+
+    if (longitude < -180 || longitude > 180) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid longitude. Must be between -180 and 180"
+      });
+    }
+
+    // Update provider shop address and location
+    const updatedProvider = await ServiceProviders.findByIdAndUpdate(
+      providerId,
+      {
+        shopAddress,
+        currentLocation: {
+          type: "Point",
+          coordinates: [longitude, latitude] // MongoDB stores [longitude, latitude]
+        }
+      },
+      { new: true }
+    ).select('username email profilePic phoneNo shopAddress servicesOffered currentLocation');
+
+    if (!updatedProvider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Shop address updated successfully",
+      data: {
+        username: updatedProvider.username,
+        email: updatedProvider.email,
+        profilePic: updatedProvider.profilePic,
+        phoneNo: updatedProvider.phoneNo,
+        shopAddress: updatedProvider.shopAddress,
+        servicesOffered: updatedProvider.servicesOffered,
+        currentLocation: updatedProvider.currentLocation
       }
     });
 
@@ -1184,5 +1254,5 @@ const resetPasswordNew = asynchandler(async (req, res) => {
   }
 });
 
-export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo, updateProfilePic, removeProfilePic, getProviderProfileInfo, updateProviderProfilePic, removeProviderProfilePic, updateProviderProfile, forgotPasswordNew, resetPasswordNew };
+export { registerUser, verifyRegistrationOtp, verifyEmailStep1, updatePasswordStep2, updatePassword, updateInfo, Loginuser, verifyOtp, LogoutUser, getCurrentUser, forgotPassword, resetPassword, testSendMail, registerProvider, getProfileInfo, updateProfilePic, removeProfilePic, getProviderProfileInfo, updateProviderProfilePic, removeProviderProfilePic, updateProviderProfile, updateProviderShopAddress, forgotPasswordNew, resetPasswordNew };
 

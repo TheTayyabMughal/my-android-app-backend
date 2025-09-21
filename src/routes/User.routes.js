@@ -21,6 +21,7 @@ import {
   updateProviderProfilePic,
   removeProviderProfilePic,
   updateProviderProfile,
+  updateProviderShopAddress,
   forgotPasswordNew,
   resetPasswordNew
 } from "../Controllers/User.controller.js";
@@ -59,6 +60,7 @@ router.route("/profile-pic").delete(verifyJWT, removeProfilePic);
 // Provider profile picture routes
 router.route("/provider/profile").get(verifyJWT, getProviderProfileInfo);
 router.route("/provider/profile").put(verifyJWT, updateProviderProfile);
+router.route("/provider/shop-address").put(verifyJWT, updateProviderShopAddress);
 router.route("/provider/profile-pic").put(verifyJWT, uploadProfilePic, updateProviderProfilePic);
 router.route("/provider/profile-pic").delete(verifyJWT, removeProviderProfilePic);
 
